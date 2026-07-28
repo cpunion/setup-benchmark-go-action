@@ -55,44 +55,20 @@ runs:
   steps:
     - id: render
       name: Aggregate and render benchmarks
-      shell: bash
+      uses: actions/github-script@v8
       env:
-        INPUT_ARTIFACTS: ${{ inputs.artifacts }}
-        INPUT_DATA_DIRECTORY: ${{ inputs.data-directory }}
-        INPUT_SERIES_KIND: ${{ inputs.series-kind }}
-        INPUT_SERIES_ID: ${{ inputs.series-id }}
-        INPUT_SERIES_LABEL: ${{ inputs.series-label }}
-        INPUT_ADDITIONAL_SERIES_KIND: ${{ inputs.additional-series-kind }}
-        INPUT_ADDITIONAL_SERIES_ID: ${{ inputs.additional-series-id }}
-        INPUT_ADDITIONAL_SERIES_LABEL: ${{ inputs.additional-series-label }}
-        INPUT_SITE_BASE_URL: ${{ inputs.site-base-url }}
-        INPUT_COMMENT_PATH: ${{ inputs.comment-path }}
-      run: |
-        set -euo pipefail
-        artifacts="$INPUT_ARTIFACTS"
-        data_directory="$INPUT_DATA_DIRECTORY"
-        comment_path="$INPUT_COMMENT_PATH"
-        [[ "$artifacts" = /* ]] || artifacts="$GITHUB_WORKSPACE/$artifacts"
-        [[ "$data_directory" = /* ]] || data_directory="$GITHUB_WORKSPACE/$data_directory"
-        [[ "$comment_path" = /* ]] || comment_path="$GITHUB_WORKSPACE/$comment_path"
-
-        args=(
-          render
-          --artifacts "$artifacts"
-          --data-dir "$data_directory"
-          --series-kind "$INPUT_SERIES_KIND"
-          --series-id "$INPUT_SERIES_ID"
-          --series-label "$INPUT_SERIES_LABEL"
-          --site-base-url "$INPUT_SITE_BASE_URL"
-          --comment "$comment_path"
-        )
-        if [[ -n "$INPUT_ADDITIONAL_SERIES_KIND" ]]; then
-          args+=(
-            --additional-series-kind "$INPUT_ADDITIONAL_SERIES_KIND"
-            --additional-series-id "$INPUT_ADDITIONAL_SERIES_ID"
-            --additional-series-label "$INPUT_ADDITIONAL_SERIES_LABEL"
-          )
-        fi
-
-        cd "$GITHUB_ACTION_PATH/.."
-        go run -mod=vendor ./cmd/setup-benchmark-go "${args[@]}"
+        BENCHMARK_ACTION_ENTRY: ${{ github.action_path }}/dist/index.js
+        BENCHMARK_ARTIFACTS: ${{ inputs.artifacts }}
+        BENCHMARK_DATA_DIRECTORY: ${{ inputs.data-directory }}
+        BENCHMARK_SERIES_KIND: ${{ inputs.series-kind }}
+        BENCHMARK_SERIES_ID: ${{ inputs.series-id }}
+        BENCHMARK_SERIES_LABEL: ${{ inputs.series-label }}
+        BENCHMARK_ADDITIONAL_SERIES_KIND: ${{ inputs.additional-series-kind }}
+        BENCHMARK_ADDITIONAL_SERIES_ID: ${{ inputs.additional-series-id }}
+        BENCHMARK_ADDITIONAL_SERIES_LABEL: ${{ inputs.additional-series-label }}
+        BENCHMARK_SITE_BASE_URL: ${{ inputs.site-base-url }}
+        BENCHMARK_COMMENT_PATH: ${{ inputs.comment-path }}
+      with:
+        script: |
+          const action = require(process.env.BENCHMARK_ACTION_ENTRY);
+          action.run();

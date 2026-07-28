@@ -11,8 +11,11 @@ The usual configuration is only an ID and a few regular expressions:
 ```yaml
 id: my-project
 groups:
-  core: '^Core.*$'
-  runtime: '^(Runtime|Scheduler).*$'
+  core: "^Core.*$"
+  runtime: "^(Runtime|Scheduler).*$"
+  parser:
+    match: "^Parse.*$"
+    chart: single
 ```
 
 Every included benchmark must match at most one group. New, unmatched
@@ -25,13 +28,13 @@ and package-qualified name.
 
 ```yaml
 id: my-project
-exclude: '^Experimental'
+exclude: "^Experimental"
 groups:
-  core: '^Core.*$'
+  core: "^Core.*$"
   storage:
     title: Storage
     match:
-      - '^(File|Database)'
+      - "^(File|Database)"
 ```
 
 ## Record
@@ -65,9 +68,16 @@ jobs:
           benchmark-file: benchmark.txt
 ```
 
-Platform ID, label, Go version, source commit, and workflow URL are discovered
-automatically. A matrix can override `platform-id` and `platform-label`; results
-are never averaged or compared across platforms.
+Platform ID and label default to the `goos` and `goarch` recorded in the
+benchmark output. Source commit and workflow URL come from the GitHub event.
+Results are never averaged or compared across platforms. A matrix that runs
+multiple Go versions on the same OS and architecture must give each version a
+distinct `platform-id` and `platform-label`.
+
+Multiple jobs can contribute disjoint benchmarks to the same platform. Give
+each job a unique `shard-id`; it defaults to `GITHUB_JOB`. The publisher rejects
+duplicate shards, duplicate benchmarks across shards, differing configurations,
+conflicting unit metadata, and source SHA mismatches.
 
 Metric names and display units come from the standard Go benchmark format, not
 from this configuration. Repeated samples such as `-count=5` are retained and
@@ -114,12 +124,12 @@ value is reported as `new`.
 To publish into another repository:
 
 ```yaml
-    uses: cpunion/setup-benchmark-go-action/.github/workflows/publish.yml@main
-    with:
-      run_id: ${{ github.event.workflow_run.id }}
-      data_repository: owner/project-benchmark-data
-    secrets:
-      data_token: ${{ secrets.BENCHMARK_DATA_TOKEN }}
+uses: cpunion/setup-benchmark-go-action/.github/workflows/publish.yml@main
+with:
+  run_id: ${{ github.event.workflow_run.id }}
+  data_repository: owner/project-benchmark-data
+secrets:
+  data_token: ${{ secrets.BENCHMARK_DATA_TOKEN }}
 ```
 
 The external token needs contents write access to the data repository. Pages
@@ -129,3 +139,7 @@ For pull requests from forks, the publisher parses untrusted artifacts without
 executing repository code, uploads a rendered preview artifact, and writes the
 report to the job summary. It does not push data or create a pull request
 comment.
+
+The parser and renderer run inside `actions/github-script@v8` on Node 24. They
+do not run `go`, inspect the consumer's Go cache, or depend on a `setup-node`
+version selected by the project.

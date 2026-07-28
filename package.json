@@ -1,0 +1,28 @@
+{
+  "name": "setup-benchmark-go-action",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Publish grouped Go benchmark history from GitHub Actions.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "check": "npm run format:check && npm run lint && npm test",
+    "format": "prettier --write \"{scripts,src,test,web}/**/*.{js,html,css}\" \"*.{json,yml,md}\" \"{.github,publish}/**/*.{yml,yaml}\"",
+    "format:check": "prettier --check \"{scripts,src,test,web}/**/*.{js,html,css}\" \"*.{json,yml,md}\" \"{.github,publish}/**/*.{yml,yaml}\"",
+    "lint": "eslint scripts src test",
+    "test": "node --test --test-reporter=spec"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "re2js": "2.8.6",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.32.0",
+    "@vercel/ncc": "0.44.1",
+    "eslint": "9.32.0",
+    "prettier": "3.6.2"
+  }
+}

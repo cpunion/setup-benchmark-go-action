@@ -13,20 +13,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-node@v6
         with:
-          go-version-file: go.mod
+          node-version: 24
           cache: true
-      - name: Verify generated files
+      - run: npm ci
+      - name: Check source
+        run: npm run check
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev
+      - name: Verify bundled action
         run: |
-          go mod tidy
-          go mod vendor
-          git diff --exit-code
-      - name: Test
-        env:
-          GOMAXPROCS: "2"
-        run: go test -p=1 -race -coverprofile=coverage.out ./...
-      - name: Vet
-        env:
-          GOMAXPROCS: "2"
-        run: go vet ./...
+          npm run build
+          git diff --exit-code -- dist publish/dist
