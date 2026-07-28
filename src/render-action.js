@@ -33,10 +33,19 @@ function run() {
     "--comment",
     workspacePath(input("comment-path")),
   ];
+  if (input("trusted-config")) {
+    add(args, "trusted-config", workspacePath(input("trusted-config")));
+  }
   add(args, "additional-series-kind", input("additional-series-kind"));
   add(args, "additional-series-id", input("additional-series-id"));
   add(args, "additional-series-label", input("additional-series-label"));
   add(args, "site-base-url", input("site-base-url"));
+  add(args, "expected-source-repository", input("expected-source-repository"));
+  add(args, "expected-source-sha", input("expected-source-sha"));
+  add(args, "source-ref", input("source-ref"));
+  add(args, "source-url", input("source-url"));
+  add(args, "source-run-url", input("source-run-url"));
+  add(args, "source-timestamp", input("source-timestamp"));
   return runRender(args);
 }
 

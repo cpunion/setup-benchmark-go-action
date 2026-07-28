@@ -58,7 +58,9 @@ test("record action adapter maps inputs to a validated artifact", () => {
 test("render action adapter writes history and publisher outputs", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-render-"));
   const artifacts = path.join(root, "artifacts");
+  const trustedConfig = path.join(root, "benchmark.yml");
   fs.mkdirSync(artifacts);
+  fs.writeFileSync(trustedConfig, "id: render\ntitle: Render\n");
   fs.writeFileSync(
     path.join(artifacts, "config.json"),
     JSON.stringify({
@@ -101,10 +103,19 @@ test("render action adapter writes history and publisher outputs", () => {
     {
       BENCHMARK_ARTIFACTS: artifacts,
       BENCHMARK_DATA_DIRECTORY: path.join(root, "data"),
+      BENCHMARK_TRUSTED_CONFIG: trustedConfig,
       BENCHMARK_SERIES_KIND: "main",
       BENCHMARK_SERIES_ID: "main",
       BENCHMARK_SERIES_LABEL: "Main",
       BENCHMARK_SITE_BASE_URL: "https://owner.github.io/project",
+      BENCHMARK_EXPECTED_SOURCE_REPOSITORY: "owner/project",
+      BENCHMARK_EXPECTED_SOURCE_SHA: "8888888888888888888888888888888888888888",
+      BENCHMARK_SOURCE_REF: "main",
+      BENCHMARK_SOURCE_URL:
+        "https://github.com/owner/project/commit/8888888888888888888888888888888888888888",
+      BENCHMARK_SOURCE_RUN_URL:
+        "https://github.com/owner/project/actions/runs/456",
+      BENCHMARK_SOURCE_TIMESTAMP: "2026-07-28T01:00:00.000Z",
       BENCHMARK_COMMENT_PATH: path.join(root, "comment.md"),
     },
     runRenderAction,
@@ -112,4 +123,24 @@ test("render action adapter writes history and publisher outputs", () => {
   assert.equal(rendered.outputs["suite-id"], "render");
   assert.match(rendered.outputs["site-url"], /series=main%2Fmain/u);
   assert.equal(fs.existsSync(rendered.outputs["comment-path"]), true);
+  const history = JSON.parse(
+    fs.readFileSync(
+      path.join(
+        root,
+        "data",
+        "go-benchmarks",
+        "render",
+        "series",
+        "main",
+        "main",
+        "history.json",
+      ),
+      "utf8",
+    ),
+  );
+  assert.equal(history.entries[0].source.ref, "main");
+  assert.equal(
+    history.entries[0].source.runUrl,
+    "https://github.com/owner/project/actions/runs/456",
+  );
 });

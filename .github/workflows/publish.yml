@@ -23,6 +23,10 @@ on:
         description: Benchmark artifact pattern.
         default: go-benchmark-*
         type: string
+      config_path:
+        description: Benchmark configuration path on the default branch.
+        default: .github/go-benchmark.yml
+        type: string
     secrets:
       data_token:
         description: Token with contents write access when data_repository is external.
@@ -50,16 +54,40 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           RUN_EVENT: ${{ github.event.workflow_run.event }}
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           data_repository="$CONFIGURED_DATA_REPOSITORY"
           [[ -n "$data_repository" ]] || data_repository="$GITHUB_REPOSITORY"
-          trusted=false
-          [[ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]] || trusted=true
+          if [[ ! "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "invalid benchmark source repository: ${HEAD_REPOSITORY:-missing}" >&2
+            exit 1
+          fi
+          if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "invalid benchmark source commit: ${HEAD_SHA:-missing}" >&2
+            exit 1
+          fi
+          if [[ -z "$HEAD_BRANCH" ]]; then
+            echo "missing benchmark source branch" >&2
+            exit 1
+          fi
 
-          if [[ "$RUN_EVENT" == pull_request && -n "$PR_NUMBER" ]]; then
+          same_repository=false
+          [[ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]] || same_repository=true
+          if [[ "$RUN_EVENT" == pull_request ]]; then
+            if [[ -z "$PR_NUMBER" ]]; then
+              PR_NUMBER="$(
+                gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/pulls" \
+                  --jq '[.[] | select(.state == "open")][0].number // empty'
+              )"
+            fi
+            if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+              echo "cannot resolve pull request for $HEAD_SHA" >&2
+              exit 1
+            fi
             kind=pull
             id="$PR_NUMBER"
             label="PR #$PR_NUMBER"
@@ -72,10 +100,19 @@ jobs:
             id="$(printf '%s' "$HEAD_BRANCH" | sha256sum | cut -c1-16)"
             label="Branch $HEAD_BRANCH"
           fi
-          branch_id="$(printf '%s' "$HEAD_BRANCH" | sha256sum | cut -c1-16)"
+          publish="$same_repository"
+          [[ "$kind" != pull ]] || publish=true
+          branch_seed="$HEAD_BRANCH"
+          branch_label="Branch $HEAD_BRANCH"
+          if [[ "$same_repository" != true ]]; then
+            branch_seed="${HEAD_REPOSITORY}:${HEAD_BRANCH}"
+            branch_label="Branch $branch_seed"
+          fi
+          branch_id="$(printf '%s' "$branch_seed" | sha256sum | cut -c1-16)"
 
           {
-            echo "trusted=$trusted"
+            echo "publish=$publish"
+            echo "same-repository=$same_repository"
             echo "kind=$kind"
             echo "id=$id"
             echo "label=$label"
@@ -83,7 +120,7 @@ jobs:
             if [[ "$kind" == pull ]]; then
               echo "additional-kind=branch"
               echo "additional-id=$branch_id"
-              echo "additional-label=Branch $HEAD_BRANCH"
+              echo "additional-label=$branch_label"
             fi
             echo "data-repository=$data_repository"
             if [[ "$data_repository" == "$GITHUB_REPOSITORY" ]]; then
@@ -103,9 +140,22 @@ jobs:
           run-id: ${{ inputs.run_id }}
           github-token: ${{ github.token }}
 
+      - name: Check out trusted benchmark configuration for fork
+        if: >-
+          steps.source.outputs.kind == 'pull' &&
+          steps.source.outputs.same-repository != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.repository.default_branch }}
+          path: benchmark-source
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.config_path }}
+          sparse-checkout-cone-mode: false
+
       - name: Require external data token
         if: >-
-          steps.source.outputs.trusted == 'true' &&
+          steps.source.outputs.publish == 'true' &&
           steps.source.outputs.same-data-repository != 'true'
         env:
           DATA_TOKEN: ${{ secrets.data_token }}
@@ -115,8 +165,8 @@ jobs:
             exit 1
           fi
 
-      - name: Check out trusted benchmark data
-        if: steps.source.outputs.trusted == 'true'
+      - name: Check out writable benchmark data
+        if: steps.source.outputs.publish == 'true'
         uses: actions/checkout@v7
         with:
           repository: ${{ steps.source.outputs.data-repository }}
@@ -126,8 +176,8 @@ jobs:
                 github.token || secrets.data_token }}
           fetch-depth: 1
 
-      - name: Check out public benchmark data for fork preview
-        if: steps.source.outputs.trusted != 'true'
+      - name: Check out public benchmark data for preview
+        if: steps.source.outputs.publish != 'true'
         env:
           DATA_REPOSITORY: ${{ steps.source.outputs.data-repository }}
         run: |
@@ -173,10 +223,13 @@ jobs:
 
       - name: Render benchmark history
         id: render
-        uses: cpunion/setup-benchmark-go-action/publish@v1.0.0
+        uses: cpunion/setup-benchmark-go-action/publish@fix/fork-pr-publishing
         with:
           artifacts: benchmark-artifacts
           data-directory: benchmark-data
+          trusted-config: >-
+            ${{ steps.source.outputs.same-repository != 'true' &&
+                format('benchmark-source/{0}', inputs.config_path) || '' }}
           series-kind: ${{ steps.source.outputs.kind }}
           series-id: ${{ steps.source.outputs.id }}
           series-label: ${{ steps.source.outputs.label }}
@@ -184,6 +237,24 @@ jobs:
           additional-series-id: ${{ steps.source.outputs.additional-id }}
           additional-series-label: ${{ steps.source.outputs.additional-label }}
           site-base-url: ${{ steps.pages.outputs.url }}
+          expected-source-repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          expected-source-sha: ${{ github.event.workflow_run.head_sha }}
+          source-ref: ${{ github.event.workflow_run.head_branch }}
+          source-url: >-
+            ${{ format(
+                '{0}/{1}/commit/{2}',
+                github.server_url,
+                github.event.workflow_run.head_repository.full_name,
+                github.event.workflow_run.head_sha) }}
+          source-run-url: >-
+            ${{ format(
+                '{0}/{1}/actions/runs/{2}',
+                github.server_url,
+                github.repository,
+                inputs.run_id) }}
+          source-timestamp: >-
+            ${{ github.event.workflow_run.run_started_at ||
+                github.event.workflow_run.created_at }}
           comment-path: ${{ runner.temp }}/go-benchmark-comment.md
 
       - name: Upload rendered preview
@@ -202,7 +273,7 @@ jobs:
         run: cat "$COMMENT_PATH" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit benchmark data
-        if: steps.source.outputs.trusted == 'true'
+        if: steps.source.outputs.publish == 'true'
         working-directory: benchmark-data
         env:
           DATA_BRANCH: ${{ inputs.data_branch }}
@@ -231,9 +302,7 @@ jobs:
           git push origin "HEAD:$DATA_BRANCH"
 
       - name: Create or update PR comment
-        if: >-
-          steps.source.outputs.trusted == 'true' &&
-          steps.source.outputs.kind == 'pull'
+        if: steps.source.outputs.kind == 'pull'
         uses: actions/github-script@v8
         env:
           COMMENT_PATH: ${{ steps.render.outputs.comment-path }}

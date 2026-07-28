@@ -8,6 +8,9 @@ inputs:
   data-directory:
     description: Checked-out benchmark data branch.
     required: true
+  trusted-config:
+    description: Optional trusted configuration used to verify artifact configuration.
+    default: ""
   series-kind:
     description: main, branch, or pull.
     required: true
@@ -28,6 +31,24 @@ inputs:
     default: ""
   site-base-url:
     description: GitHub Pages root URL.
+    default: ""
+  expected-source-repository:
+    description: Repository identity required in every downloaded artifact.
+    default: ""
+  expected-source-sha:
+    description: Commit identity required in every downloaded artifact.
+    default: ""
+  source-ref:
+    description: Trusted source ref stored in history.
+    default: ""
+  source-url:
+    description: Trusted source commit URL stored in history.
+    default: ""
+  source-run-url:
+    description: Trusted source workflow URL stored in history.
+    default: ""
+  source-timestamp:
+    description: Trusted source workflow timestamp stored in history.
     default: ""
   comment-path:
     description: Output path for the generated Markdown report.
@@ -60,6 +81,7 @@ runs:
         BENCHMARK_ACTION_ENTRY: ${{ github.action_path }}/dist/index.js
         BENCHMARK_ARTIFACTS: ${{ inputs.artifacts }}
         BENCHMARK_DATA_DIRECTORY: ${{ inputs.data-directory }}
+        BENCHMARK_TRUSTED_CONFIG: ${{ inputs.trusted-config }}
         BENCHMARK_SERIES_KIND: ${{ inputs.series-kind }}
         BENCHMARK_SERIES_ID: ${{ inputs.series-id }}
         BENCHMARK_SERIES_LABEL: ${{ inputs.series-label }}
@@ -67,6 +89,12 @@ runs:
         BENCHMARK_ADDITIONAL_SERIES_ID: ${{ inputs.additional-series-id }}
         BENCHMARK_ADDITIONAL_SERIES_LABEL: ${{ inputs.additional-series-label }}
         BENCHMARK_SITE_BASE_URL: ${{ inputs.site-base-url }}
+        BENCHMARK_EXPECTED_SOURCE_REPOSITORY: ${{ inputs.expected-source-repository }}
+        BENCHMARK_EXPECTED_SOURCE_SHA: ${{ inputs.expected-source-sha }}
+        BENCHMARK_SOURCE_REF: ${{ inputs.source-ref }}
+        BENCHMARK_SOURCE_URL: ${{ inputs.source-url }}
+        BENCHMARK_SOURCE_RUN_URL: ${{ inputs.source-run-url }}
+        BENCHMARK_SOURCE_TIMESTAMP: ${{ inputs.source-timestamp }}
         BENCHMARK_COMMENT_PATH: ${{ inputs.comment-path }}
       with:
         script: |

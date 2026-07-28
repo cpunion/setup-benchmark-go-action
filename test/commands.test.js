@@ -50,6 +50,8 @@ test("records and renders without invoking a Go toolchain", () => {
     artifact,
     "--data-dir",
     data,
+    "--trusted-config",
+    config,
     "--series-kind",
     "pull",
     "--series-id",
@@ -62,6 +64,18 @@ test("records and renders without invoking a Go toolchain", () => {
     "feature",
     "--additional-series-label",
     "Branch feature",
+    "--expected-source-repository",
+    "owner/project",
+    "--expected-source-sha",
+    sha,
+    "--source-ref",
+    "feature",
+    "--source-url",
+    `https://github.com/owner/project/commit/${sha}`,
+    "--source-run-url",
+    "https://github.com/owner/project/actions/runs/123",
+    "--source-timestamp",
+    "2026-07-28T12:00:00.000Z",
     "--comment",
     comment,
   ]);
@@ -79,6 +93,107 @@ test("records and renders without invoking a Go toolchain", () => {
       ),
     ),
     true,
+  );
+  const history = JSON.parse(
+    fs.readFileSync(
+      path.join(
+        data,
+        "go-benchmarks",
+        "command",
+        "series",
+        "pull",
+        "9",
+        "history.json",
+      ),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(history.entries[0].source, {
+    repository: "owner/project",
+    sha,
+    ref: "feature",
+    url: `https://github.com/owner/project/commit/${sha}`,
+    runUrl: "https://github.com/owner/project/actions/runs/123",
+    timestamp: "2026-07-28T12:00:00.000Z",
+  });
+
+  assert.throws(
+    () =>
+      runRender([
+        "--artifacts",
+        artifact,
+        "--data-dir",
+        path.join(root, "rejected"),
+        "--series-kind",
+        "pull",
+        "--series-id",
+        "9",
+        "--series-label",
+        "PR #9",
+        "--expected-source-repository",
+        "another/project",
+        "--expected-source-sha",
+        sha,
+      ]),
+    /artifact source repository .* does not match/u,
+  );
+  assert.throws(
+    () =>
+      runRender([
+        "--artifacts",
+        artifact,
+        "--data-dir",
+        path.join(root, "rejected-sha"),
+        "--series-kind",
+        "pull",
+        "--series-id",
+        "9",
+        "--series-label",
+        "PR #9",
+        "--expected-source-repository",
+        "owner/project",
+        "--expected-source-sha",
+        "0000000000000000000000000000000000000000",
+      ]),
+    /artifact source SHA .* does not match/u,
+  );
+  assert.throws(
+    () =>
+      runRender([
+        "--artifacts",
+        artifact,
+        "--data-dir",
+        path.join(root, "rejected-partial-source"),
+        "--series-kind",
+        "pull",
+        "--series-id",
+        "9",
+        "--series-label",
+        "PR #9",
+        "--expected-source-repository",
+        "owner/project",
+      ]),
+    /repository and SHA must be provided together/u,
+  );
+  const changedConfig = path.join(root, "changed-benchmark.yml");
+  fs.writeFileSync(changedConfig, "id: command\ntitle: Changed\n");
+  assert.throws(
+    () =>
+      runRender([
+        "--artifacts",
+        artifact,
+        "--data-dir",
+        path.join(root, "rejected-config"),
+        "--trusted-config",
+        changedConfig,
+        "--series-kind",
+        "pull",
+        "--series-id",
+        "9",
+        "--series-label",
+        "PR #9",
+      ]),
+    /artifact configuration does not match/u,
   );
 });
 

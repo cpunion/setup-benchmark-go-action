@@ -392,9 +392,12 @@ platform in `main`. If no `main` baseline exists yet, including the first setup
 PR in a new project, the report succeeds and marks every metric as `new`.
 
 The publisher also uploads a rendered preview artifact and writes the report to
-the job summary. Pull requests from forks get only those two outputs: the
-publisher parses their untrusted artifacts but does not push data or create a
-comment.
+the job summary. Pull requests from forks use the same history and comment
+flow. Their artifacts must report the exact repository and commit from the
+trusted `workflow_run` event, and the publisher confirms the current pull
+request head again before writing. Their configuration must also match
+`config_path` on the default branch. The data token is never available to the
+pull request workflow.
 
 ### External Data Repository
 
@@ -408,6 +411,7 @@ jobs:
     with:
       run_id: ${{ github.event.workflow_run.id }}
       data_repository: owner/project-benchmark-data
+      config_path: .github/project-benchmark.yml
     secrets:
       data_token: ${{ secrets.BENCHMARK_DATA_TOKEN }}
 ```
@@ -439,13 +443,14 @@ there from its `pages` branch. If the Pages URL is nonstandard, set
 Call
 `cpunion/setup-benchmark-go-action/.github/workflows/publish.yml@v1` as a job.
 
-| Input              | Required | Default                 | Meaning                                               |
-| ------------------ | -------- | ----------------------- | ----------------------------------------------------- |
-| `run_id`           | yes      |                         | Workflow run containing recorder artifacts.           |
-| `data_repository`  | no       | caller repository       | Repository containing the data branch and Pages site. |
-| `data_branch`      | no       | `pages`                 | Data and Pages branch.                                |
-| `site_base_url`    | no       | derived from repository | Public Pages root URL.                                |
-| `artifact_pattern` | no       | `go-benchmark-*`        | Artifact download glob.                               |
+| Input              | Required | Default                    | Meaning                                               |
+| ------------------ | -------- | -------------------------- | ----------------------------------------------------- |
+| `run_id`           | yes      |                            | Workflow run containing recorder artifacts.           |
+| `data_repository`  | no       | caller repository          | Repository containing the data branch and Pages site. |
+| `data_branch`      | no       | `pages`                    | Data and Pages branch.                                |
+| `site_base_url`    | no       | derived from repository    | Public Pages root URL.                                |
+| `artifact_pattern` | no       | `go-benchmark-*`           | Artifact download glob.                               |
+| `config_path`      | no       | `.github/go-benchmark.yml` | Trusted default-branch config for fork PRs.           |
 
 | Secret       | Required                 | Meaning                                                |
 | ------------ | ------------------------ | ------------------------------------------------------ |
@@ -464,8 +469,12 @@ It has no production dependency on the Go toolchain.
 
 Artifacts contain JSON data and a configuration snapshot, never executable
 code. Before merging shards or writing history, the publisher validates schema
-versions, repository and commit identity, URLs, labels, metric values, sample
-medians, configuration, layouts, units, platforms, and size limits.
+versions, URLs, labels, metric values, sample medians, configuration, layouts,
+units, platforms, and size limits. For fork pull requests, the artifact
+configuration must exactly match the configured file on the default branch. It
+then binds repository, commit, ref, URLs, and timestamp to trusted
+`workflow_run` metadata. This lets fork pull requests publish without trusting
+identity or storage layout supplied by their workflow.
 
 The trusted publisher serializes writes per data repository and publishes one
 commit after all platform artifacts have passed validation.

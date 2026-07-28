@@ -4,7 +4,12 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { parseArgs } = require("node:util");
-const { loadArtifacts, writeArtifact, schemaVersion } = require("./artifact");
+const {
+  loadArtifacts,
+  validateResult,
+  writeArtifact,
+  schemaVersion,
+} = require("./artifact");
 const { loadConfig } = require("./config");
 const { parseGoBenchmark } = require("./gobench");
 const { writeReport } = require("./report");
@@ -191,10 +196,53 @@ function series(values, prefix = "") {
   };
 }
 
+function bindSource(results, config, values) {
+  const expectedRepository = values["expected-source-repository"];
+  const expectedSHA = values["expected-source-sha"];
+  assert(
+    Boolean(expectedRepository) === Boolean(expectedSHA),
+    "expected source repository and SHA must be provided together",
+  );
+  for (const result of results) {
+    if (expectedRepository) {
+      assert(
+        result.source.repository === expectedRepository,
+        `artifact source repository ${JSON.stringify(result.source.repository)} does not match ${JSON.stringify(expectedRepository)}`,
+      );
+      assert(
+        result.source.sha === expectedSHA,
+        `artifact source SHA ${JSON.stringify(result.source.sha)} does not match ${JSON.stringify(expectedSHA)}`,
+      );
+    }
+    result.source = {
+      ...result.source,
+      ...(values["source-ref"] ? { ref: values["source-ref"] } : {}),
+      ...(values["source-url"] ? { url: values["source-url"] } : {}),
+      ...(values["source-run-url"] ? { runUrl: values["source-run-url"] } : {}),
+      ...(values["source-timestamp"]
+        ? { timestamp: values["source-timestamp"] }
+        : {}),
+    };
+    validateResult(result, config);
+  }
+}
+
+function bindConfig(loaded, filename) {
+  if (!filename) return;
+  const trusted = loadConfig(filename);
+  assert(
+    JSON.stringify(loaded.config.toJSON()) === JSON.stringify(trusted.toJSON()),
+    "artifact configuration does not match the trusted configuration",
+  );
+  for (const result of loaded.results) validateResult(result, trusted);
+  loaded.config = trusted;
+}
+
 function runRender(args, runtime = {}) {
   const values = options(args, {
     artifacts: true,
     "data-dir": true,
+    "trusted-config": true,
     "series-kind": true,
     "series-id": true,
     "series-label": true,
@@ -202,6 +250,12 @@ function runRender(args, runtime = {}) {
     "additional-series-id": true,
     "additional-series-label": true,
     "site-base-url": true,
+    "expected-source-repository": true,
+    "expected-source-sha": true,
+    "source-ref": true,
+    "source-url": true,
+    "source-run-url": true,
+    "source-timestamp": true,
     comment: true,
     "github-output": true,
   });
@@ -211,6 +265,8 @@ function runRender(args, runtime = {}) {
     "render",
   );
   const loaded = loadArtifacts(values.artifacts);
+  bindConfig(loaded, values["trusted-config"]);
+  bindSource(loaded.results, loaded.config, values);
   const primary = series(values);
   const updated = update(
     values["data-dir"],
