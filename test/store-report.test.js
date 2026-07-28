@@ -85,6 +85,14 @@ test("stores main and pull histories, writes web assets, and reports a baseline"
     index.series.map((item) => `${item.kind}/${item.id}`),
     ["main/main", "pull/7"],
   );
+  assert.match(index.series[0].updatedAt, /^\d{4}-\d{2}-\d{2}T.*Z$/u);
+  assert.match(
+    fs.readFileSync(
+      path.join(root, "go-benchmarks", "history", "index.html"),
+      "utf8",
+    ),
+    /<time id="updated-at"><\/time>/u,
+  );
 });
 
 test("marks values new when no main platform baseline exists", () => {
