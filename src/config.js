@@ -4,6 +4,7 @@ const path = require("node:path");
 const YAML = require("yaml");
 const { RE2JS } = require("re2js");
 const { assert, hasControl, safePart } = require("./util");
+const { parseViews, serializeViews } = require("./view-config");
 const fs = require("node:fs");
 
 function stringList(value, field) {
@@ -128,6 +129,7 @@ class Config {
       };
       this.compiledGroups[id] = compilePatterns(match, `group ${id}`);
     }
+    this.views = parseViews(raw.views);
     this.compiledInclude = compilePatterns(this.include, "include");
     this.compiledExclude = compilePatterns(this.exclude, "exclude");
   }
@@ -169,6 +171,7 @@ class Config {
       exclude: this.exclude,
       maxBenchmarks: this.maxBenchmarks,
       groups: this.groups,
+      views: serializeViews(this.views),
     };
   }
 }
