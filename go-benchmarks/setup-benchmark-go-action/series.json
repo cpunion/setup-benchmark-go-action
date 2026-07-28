@@ -23,6 +23,16 @@
     },
     {
       "kind": "branch",
+      "id": "8614c6b99d808a08",
+      "label": "Branch feat/comment-views",
+      "path": "series/branch/8614c6b99d808a08/history.json",
+      "configPath": "series/branch/8614c6b99d808a08/config.json",
+      "sha": "cf75ebfa665d6cf792c3e796fde808158f187cb1",
+      "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/cf75ebfa665d6cf792c3e796fde808158f187cb1",
+      "updatedAt": "2026-07-28T08:25:41.801Z"
+    },
+    {
+      "kind": "branch",
       "id": "4ff229467c5e5f04",
       "label": "Branch feat/self-benchmarks",
       "path": "series/branch/4ff229467c5e5f04/history.json",
@@ -70,6 +80,16 @@
       "sha": "4cbea9aaa00fe278a01879adc348f395a079b19a",
       "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/4cbea9aaa00fe278a01879adc348f395a079b19a",
       "updatedAt": "2026-07-28T07:59:06.523Z"
+    },
+    {
+      "kind": "pull",
+      "id": "5",
+      "label": "PR #5",
+      "path": "series/pull/5/history.json",
+      "configPath": "series/pull/5/config.json",
+      "sha": "cf75ebfa665d6cf792c3e796fde808158f187cb1",
+      "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/cf75ebfa665d6cf792c3e796fde808158f187cb1",
+      "updatedAt": "2026-07-28T08:25:41.798Z"
     }
   ]
 }
