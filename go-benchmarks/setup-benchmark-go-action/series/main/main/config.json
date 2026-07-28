@@ -37,5 +37,71 @@
       ],
       "chart": "single"
     }
+  },
+  "views": {
+    "bundles": {
+      "title": "Action bundle sizes",
+      "select": {
+        "groups": [
+          "^bundles$"
+        ]
+      },
+      "table": {
+        "rows": [
+          "benchmark"
+        ],
+        "columns": [
+          "metric"
+        ],
+        "collapsed": false,
+        "missing": "error",
+        "empty": "hide",
+        "max-rows": 200,
+        "dimensions": {
+          "benchmark": {
+            "title": "Bundle",
+            "trim-prefix": "Benchmark"
+          }
+        },
+        "metrics": {
+          "binary-bytes": {
+            "title": "Size",
+            "format": "bytes"
+          }
+        }
+      }
+    },
+    "operations": {
+      "title": "Parser and validation operations",
+      "select": {
+        "groups": [
+          "^(parsing|grouping|validation)$"
+        ]
+      },
+      "table": {
+        "rows": [
+          "group",
+          "benchmark"
+        ],
+        "columns": [
+          "metric"
+        ],
+        "collapsed": true,
+        "missing": "error",
+        "empty": "hide",
+        "max-rows": 200,
+        "dimensions": {
+          "benchmark": {
+            "trim-prefix": "Benchmark"
+          }
+        },
+        "metrics": {
+          "ns/op": {
+            "title": "Median time",
+            "format": "auto"
+          }
+        }
+      }
+    }
   }
 }
