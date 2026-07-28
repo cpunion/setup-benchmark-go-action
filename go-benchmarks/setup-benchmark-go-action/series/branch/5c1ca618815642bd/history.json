@@ -203,6 +203,205 @@
           ]
         }
       }
+    },
+    {
+      "source": {
+        "repository": "cpunion/setup-benchmark-go-action",
+        "sha": "50c1cd509211b825c47f2ad90c3e54e0541b4779",
+        "ref": "docs/v1-readme",
+        "url": "https://github.com/cpunion/setup-benchmark-go-action/commit/50c1cd509211b825c47f2ad90c3e54e0541b4779",
+        "runUrl": "https://github.com/cpunion/setup-benchmark-go-action/actions/runs/30342642799",
+        "timestamp": "2026-07-28T08:30:36.530Z"
+      },
+      "platforms": {
+        "ubuntu-node24-amd64": {
+          "schemaVersion": 1,
+          "suiteId": "setup-benchmark-go-action",
+          "shardId": "merged",
+          "source": {
+            "repository": "cpunion/setup-benchmark-go-action",
+            "sha": "50c1cd509211b825c47f2ad90c3e54e0541b4779",
+            "ref": "docs/v1-readme",
+            "url": "https://github.com/cpunion/setup-benchmark-go-action/commit/50c1cd509211b825c47f2ad90c3e54e0541b4779",
+            "runUrl": "https://github.com/cpunion/setup-benchmark-go-action/actions/runs/30342642799",
+            "timestamp": "2026-07-28T08:30:36.530Z"
+          },
+          "platform": {
+            "id": "ubuntu-node24-amd64",
+            "label": "Ubuntu / amd64 / Node 24",
+            "os": "linux",
+            "arch": "amd64"
+          },
+          "units": {
+            "ns/op": {
+              "better": "lower"
+            },
+            "binary-bytes": {
+              "better": "lower",
+              "assume": "exact"
+            }
+          },
+          "benchmarks": [
+            {
+              "name": "BenchmarkGroupRules100",
+              "package": "github.com/cpunion/setup-benchmark-go-action",
+              "group": "grouping",
+              "chart": "group:grouping",
+              "samples": [
+                {
+                  "iterations": 214,
+                  "measurements": {
+                    "ns/op": 280447.056
+                  }
+                },
+                {
+                  "iterations": 214,
+                  "measurements": {
+                    "ns/op": 225184.579
+                  }
+                },
+                {
+                  "iterations": 214,
+                  "measurements": {
+                    "ns/op": 224404.252
+                  }
+                },
+                {
+                  "iterations": 214,
+                  "measurements": {
+                    "ns/op": 223926.533
+                  }
+                },
+                {
+                  "iterations": 214,
+                  "measurements": {
+                    "ns/op": 222835.14
+                  }
+                }
+              ],
+              "measurements": {
+                "ns/op": 224404.252
+              }
+            },
+            {
+              "name": "BenchmarkParseGoOutput40",
+              "package": "github.com/cpunion/setup-benchmark-go-action",
+              "group": "parsing",
+              "chart": "group:parsing",
+              "samples": [
+                {
+                  "iterations": 294,
+                  "measurements": {
+                    "ns/op": 300534.136
+                  }
+                },
+                {
+                  "iterations": 294,
+                  "measurements": {
+                    "ns/op": 273879.085
+                  }
+                },
+                {
+                  "iterations": 294,
+                  "measurements": {
+                    "ns/op": 248071.548
+                  }
+                },
+                {
+                  "iterations": 294,
+                  "measurements": {
+                    "ns/op": 242374.966
+                  }
+                },
+                {
+                  "iterations": 294,
+                  "measurements": {
+                    "ns/op": 260932.31
+                  }
+                }
+              ],
+              "measurements": {
+                "ns/op": 260932.31
+              }
+            },
+            {
+              "name": "BenchmarkRecordBundle",
+              "package": "github.com/cpunion/setup-benchmark-go-action",
+              "group": "bundles",
+              "chart": "benchmark:github.com/cpunion/setup-benchmark-go-action::BenchmarkRecordBundle",
+              "samples": [
+                {
+                  "iterations": 1,
+                  "measurements": {
+                    "binary-bytes": 318657
+                  }
+                }
+              ],
+              "measurements": {
+                "binary-bytes": 318657
+              }
+            },
+            {
+              "name": "BenchmarkRenderBundle",
+              "package": "github.com/cpunion/setup-benchmark-go-action",
+              "group": "bundles",
+              "chart": "benchmark:github.com/cpunion/setup-benchmark-go-action::BenchmarkRenderBundle",
+              "samples": [
+                {
+                  "iterations": 1,
+                  "measurements": {
+                    "binary-bytes": 318906
+                  }
+                }
+              ],
+              "measurements": {
+                "binary-bytes": 318906
+              }
+            },
+            {
+              "name": "BenchmarkValidateArtifact40",
+              "package": "github.com/cpunion/setup-benchmark-go-action",
+              "group": "validation",
+              "chart": "group:validation",
+              "samples": [
+                {
+                  "iterations": 306,
+                  "measurements": {
+                    "ns/op": 297141.578
+                  }
+                },
+                {
+                  "iterations": 306,
+                  "measurements": {
+                    "ns/op": 296575.801
+                  }
+                },
+                {
+                  "iterations": 306,
+                  "measurements": {
+                    "ns/op": 274468.81
+                  }
+                },
+                {
+                  "iterations": 306,
+                  "measurements": {
+                    "ns/op": 276395.572
+                  }
+                },
+                {
+                  "iterations": 306,
+                  "measurements": {
+                    "ns/op": 275611.526
+                  }
+                }
+              ],
+              "measurements": {
+                "ns/op": 276395.572
+              }
+            }
+          ]
+        }
+      }
     }
   ]
 }
