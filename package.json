@@ -1,6 +1,6 @@
 {
   "name": "setup-benchmark-go-action",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Publish grouped Go benchmark history from GitHub Actions.",
   "main": "dist/index.js",
