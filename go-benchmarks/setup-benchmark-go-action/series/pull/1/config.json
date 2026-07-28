@@ -6,7 +6,7 @@
   "include": [
     "^Benchmark"
   ],
-  "exclude": null,
+  "exclude": [],
   "maxBenchmarks": 500,
   "groups": {
     "grouping": {
