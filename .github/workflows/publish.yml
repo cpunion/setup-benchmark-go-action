@@ -206,9 +206,21 @@ jobs:
         working-directory: benchmark-data
         env:
           DATA_BRANCH: ${{ inputs.data_branch }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.source.outputs.pr }}
+          SERIES_KIND: ${{ steps.source.outputs.kind }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
+          if [[ "$SERIES_KIND" == pull ]]; then
+            current_head="$(
+              gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha
+            )"
+            if [[ "$current_head" != "$SOURCE_SHA" ]]; then
+              echo "skip stale benchmark data for $SOURCE_SHA; pull request is at $current_head"
+              exit 0
+            fi
+          fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add --all
@@ -227,11 +239,24 @@ jobs:
           COMMENT_PATH: ${{ steps.render.outputs.comment-path }}
           COMMENT_MARKER: ${{ steps.render.outputs.marker }}
           PR_NUMBER: ${{ steps.source.outputs.pr }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         with:
           script: |
             const fs = require("fs");
-            const body = fs.readFileSync(process.env.COMMENT_PATH, "utf8");
             const issue_number = Number(process.env.PR_NUMBER);
+            const pull = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: issue_number,
+            });
+            if (pull.data.head.sha !== process.env.SOURCE_SHA) {
+              core.info(
+                `Skip stale benchmark comment for ${process.env.SOURCE_SHA}; ` +
+                `pull request is at ${pull.data.head.sha}.`
+              );
+              return;
+            }
+            const body = fs.readFileSync(process.env.COMMENT_PATH, "utf8");
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,

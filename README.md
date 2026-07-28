@@ -94,7 +94,10 @@ jobs:
 
 The separate `workflow_run` publisher is intentional. Pull request code can
 produce benchmark artifacts, but only the publisher from the default branch can
-write history or comments. It validates every artifact before using it.
+write history or comments. It validates every artifact before using it. Before
+each remote write, the publisher also verifies that a pull request still points
+at the benchmarked commit, so an older run that finishes late cannot replace
+newer history or comments.
 
 By default, data and the generated site are committed atomically to a `pages`
 branch in the project repository. In **Settings > Pages**, select **Deploy from
