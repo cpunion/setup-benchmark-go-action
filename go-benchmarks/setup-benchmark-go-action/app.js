@@ -57,6 +57,7 @@ async function loadSeries(series) {
   state.history = await historyResponse.json();
   state.config = await configResponse.json();
   const latest = latestEntry();
+  document.title = `${state.config.title} history`;
   el.title.textContent = state.config.title;
   el.repository.textContent = latest?.source.repository || "Source repository";
   el.repository.href = latest?.source.repository
