@@ -81,7 +81,7 @@ func TestValidateResultRejectsUnsafeArtifact(t *testing.T) {
 	}
 }
 
-func testConfig(t *testing.T) *config.Config {
+func testConfig(t testing.TB) *config.Config {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yml")
 	if err := os.WriteFile(path, []byte("id: sample\ngroups:\n  core: '^BenchmarkCore'\n"), 0o644); err != nil {
