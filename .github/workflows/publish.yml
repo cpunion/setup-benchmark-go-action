@@ -223,7 +223,7 @@ jobs:
 
       - name: Render benchmark history
         id: render
-        uses: cpunion/setup-benchmark-go-action/publish@v1.0.1
+        uses: cpunion/setup-benchmark-go-action/publish@v1.0.2
         with:
           artifacts: benchmark-artifacts
           data-directory: benchmark-data
