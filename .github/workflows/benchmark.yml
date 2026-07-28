@@ -32,7 +32,7 @@ jobs:
             -cpu=1 \
             ./internal/config ./internal/gobench ./internal/store \
             | tee benchmark.txt
-      - uses: cpunion/setup-benchmark-go-action@main
+      - uses: cpunion/setup-benchmark-go-action@feat/node-runtime
         with:
           config: .github/go-benchmark.yml
           benchmark-file: benchmark.txt
