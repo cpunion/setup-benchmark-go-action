@@ -7,9 +7,9 @@
       "label": "Main",
       "path": "series/main/main/history.json",
       "configPath": "series/main/main/config.json",
-      "sha": "823f13467bceb35a00338c3e6203a365cfaf32c6",
-      "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/823f13467bceb35a00338c3e6203a365cfaf32c6",
-      "updatedAt": "2026-07-28T08:27:43.200Z"
+      "sha": "7254b6c96ee07b2c55e3005e6576e662b1bdd8ae",
+      "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/7254b6c96ee07b2c55e3005e6576e662b1bdd8ae",
+      "updatedAt": "2026-07-28T09:23:20.239Z"
     },
     {
       "kind": "branch",
