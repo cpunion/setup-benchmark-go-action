@@ -8,6 +8,21 @@ The recorder does not install Go or Node, run `go`, or inspect toolchain caches.
 Projects keep full control of benchmark execution; this action only parses the
 result file and uploads a validated artifact.
 
+## Results
+
+The publisher creates one bot comment and updates it for later commits:
+
+![Benchmark pull request comment](docs/images/pr-comment.png)
+
+GitHub Pages keeps long-term Main, Branches, and Pull requests series. A merged
+commit extends the Main series:
+
+![Main benchmark history](docs/images/pages-main.png)
+
+Pull request history remains available independently for investigation:
+
+![Pull request benchmark history](docs/images/pages-pull-request.png)
+
 ## Quick Start
 
 Create `.github/go-benchmark.yml`:
