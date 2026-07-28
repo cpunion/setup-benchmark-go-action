@@ -1,0 +1,7 @@
+id: action-ci
+title: Action integration
+groups:
+  core: "^Core"
+  parser:
+    match: "^Parse"
+    chart: single

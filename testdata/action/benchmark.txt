@@ -1,0 +1,7 @@
+goos: linux
+goarch: amd64
+pkg: example.com/project
+BenchmarkCoreRead-8 100 10 ns/op 4 B/op
+BenchmarkCoreRead-8 100 12 ns/op 4 B/op
+BenchmarkParseFile-8 50 20 ns/op
+BenchmarkOther-8 25 30 ns/op

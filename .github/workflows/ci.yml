@@ -27,3 +27,38 @@ jobs:
         run: |
           npm run build
           git diff --exit-code -- dist publish/dist
+      - name: Record integration fixture
+        id: record
+        uses: ./
+        with:
+          config: testdata/action/benchmark.yml
+          benchmark-file: testdata/action/benchmark.txt
+          retention-days: 1
+      - name: Download integration artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.record.outputs.artifact-name }}
+          path: ${{ runner.temp }}/benchmark-artifacts
+      - name: Render integration fixture
+        id: render
+        uses: ./publish
+        with:
+          artifacts: ${{ runner.temp }}/benchmark-artifacts
+          data-directory: ${{ runner.temp }}/benchmark-data
+          series-kind: pull
+          series-id: "1"
+          series-label: "PR #1"
+          additional-series-kind: branch
+          additional-series-id: feature
+          additional-series-label: Branch feature
+          site-base-url: https://example.github.io/project
+          comment-path: ${{ runner.temp }}/benchmark-comment.md
+      - name: Verify rendered fixture
+        env:
+          COMMENT_PATH: ${{ steps.render.outputs.comment-path }}
+          SITE_PATH: ${{ steps.render.outputs.site-path }}
+        run: |
+          test -s "$COMMENT_PATH"
+          test -s "$SITE_PATH/index.html"
+          test -s "$SITE_PATH/series/pull/1/history.json"
+          test -s "$SITE_PATH/series/branch/feature/history.json"
