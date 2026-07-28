@@ -101,6 +101,13 @@ h2 {
   margin: 0;
   font-size: 24px;
 }
+.series-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: #65757d;
+  font-size: 12px;
+}
 .group-tabs {
   padding: 16px 0;
 }
@@ -161,6 +168,9 @@ h2 {
   .series-header {
     align-items: start;
     flex-direction: column;
+  }
+  .series-meta {
+    justify-items: start;
   }
   .charts {
     grid-template-columns: 1fr;

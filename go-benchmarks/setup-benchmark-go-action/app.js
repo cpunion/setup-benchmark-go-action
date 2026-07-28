@@ -15,6 +15,20 @@ function byId(id) {
   return document.getElementById(id);
 }
 
+function formatLocalTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}
+
 function keyOf(benchmark) {
   return benchmark.package
     ? `${benchmark.package}::${benchmark.name}`
@@ -123,6 +137,11 @@ async function loadSeries(series) {
   el.seriesTitle.textContent = series.label;
   el.commit.textContent = series.sha.slice(0, 12);
   el.commit.href = series.sourceUrl;
+  el.updatedAt.dateTime = series.updatedAt || "";
+  el.updatedAt.textContent = series.updatedAt
+    ? formatLocalTime(series.updatedAt)
+    : "";
+  el.updatedAt.title = series.updatedAt ? `UTC: ${series.updatedAt}` : "";
 
   const platformMap = new Map();
   for (const entry of state.history.entries || []) {
@@ -307,6 +326,7 @@ async function start() {
     seriesKind: byId("series-kind"),
     seriesTitle: byId("series-title"),
     commit: byId("commit"),
+    updatedAt: byId("updated-at"),
     groupTabs: byId("group-tabs"),
     charts: byId("charts"),
     empty: byId("empty"),
