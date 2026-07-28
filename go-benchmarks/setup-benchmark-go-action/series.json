@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "series": [
     {
+      "kind": "main",
+      "id": "main",
+      "label": "Main",
+      "path": "series/main/main/history.json",
+      "configPath": "series/main/main/config.json",
+      "sha": "b0ca8e4d6a47a70b41d045b5392adf056842389a",
+      "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/b0ca8e4d6a47a70b41d045b5392adf056842389a",
+      "updatedAt": "2026-07-28T07:50:52.031Z"
+    },
+    {
       "kind": "branch",
       "id": "4ff229467c5e5f04",
       "label": "Branch feat/self-benchmarks",
