@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "id": "setup-benchmark-go-action",
+  "title": "setup-benchmark-go-action",
+  "sitePath": "go-benchmarks/setup-benchmark-go-action",
+  "include": [
+    "^Benchmark"
+  ],
+  "exclude": null,
+  "maxBenchmarks": 500,
+  "groups": {
+    "grouping": {
+      "title": "Grouping",
+      "match": [
+        "^Group.*$"
+      ]
+    },
+    "parsing": {
+      "title": "Parsing",
+      "match": [
+        "^Parse.*$"
+      ]
+    },
+    "validation": {
+      "title": "Validation",
+      "match": [
+        "^Validate.*$"
+      ]
+    }
+  }
+}

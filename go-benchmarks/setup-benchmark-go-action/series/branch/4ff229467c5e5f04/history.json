@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "suiteId": "setup-benchmark-go-action",
-  "kind": "pull",
-  "id": "1",
-  "label": "PR #1",
+  "kind": "branch",
+  "id": "4ff229467c5e5f04",
+  "label": "Branch feat/self-benchmarks",
   "entries": [
     {
       "source": {
