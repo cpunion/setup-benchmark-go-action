@@ -1,0 +1,31 @@
+name: Go benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Run self benchmarks
+        run: node scripts/benchmark.js | tee benchmark.txt
+      - uses: cpunion/setup-benchmark-go-action@main
+        with:
+          config: .github/go-benchmark.yml
+          benchmark-file: benchmark.txt
+          platform-id: ubuntu-node24-amd64
+          platform-label: Ubuntu / amd64 / Node 24

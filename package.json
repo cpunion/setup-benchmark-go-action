@@ -5,6 +5,7 @@
   "description": "Publish grouped Go benchmark history from GitHub Actions.",
   "main": "dist/index.js",
   "scripts": {
+    "benchmark": "node scripts/benchmark.js",
     "build": "node scripts/build.js",
     "check": "npm run format:check && npm run lint && npm test",
     "format": "prettier --write \"{scripts,src,test,web}/**/*.{js,html,css}\" \"*.{json,yml,md}\" \"{.github,publish}/**/*.{yml,yaml}\"",

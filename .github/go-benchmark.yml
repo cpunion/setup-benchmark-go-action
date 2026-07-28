@@ -1,0 +1,9 @@
+id: setup-benchmark-go-action
+title: setup-benchmark-go-action
+groups:
+  parsing: "^Parse"
+  grouping: "^Group"
+  validation: "^Validate"
+  bundles:
+    match: "Bundle$"
+    chart: single
