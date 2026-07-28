@@ -63,6 +63,16 @@
     },
     {
       "kind": "branch",
+      "id": "3f4e711564daa587",
+      "label": "Branch fix/local-time-display",
+      "path": "series/branch/3f4e711564daa587/history.json",
+      "configPath": "series/branch/3f4e711564daa587/config.json",
+      "sha": "aff23a40313f6ee251716ffbe8e81fda2874108f",
+      "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/aff23a40313f6ee251716ffbe8e81fda2874108f",
+      "updatedAt": "2026-07-28T11:34:26.973Z"
+    },
+    {
+      "kind": "branch",
       "id": "e7020745d1b7cec3",
       "label": "Branch release/v1.0.1",
       "path": "series/branch/e7020745d1b7cec3/history.json",
@@ -130,6 +140,16 @@
       "sha": "d07325c6421a4afcec2c9dc90c79faf98ae1029b",
       "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/d07325c6421a4afcec2c9dc90c79faf98ae1029b",
       "updatedAt": "2026-07-28T10:45:21.580Z"
+    },
+    {
+      "kind": "pull",
+      "id": "8",
+      "label": "PR #8",
+      "path": "series/pull/8/history.json",
+      "configPath": "series/pull/8/config.json",
+      "sha": "aff23a40313f6ee251716ffbe8e81fda2874108f",
+      "sourceUrl": "https://github.com/cpunion/setup-benchmark-go-action/commit/aff23a40313f6ee251716ffbe8e81fda2874108f",
+      "updatedAt": "2026-07-28T11:34:26.970Z"
     }
   ]
 }

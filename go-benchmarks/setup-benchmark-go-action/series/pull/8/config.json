@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "id": "setup-benchmark-go-action",
+  "title": "setup-benchmark-go-action",
+  "sitePath": "go-benchmarks/setup-benchmark-go-action",
+  "include": [
+    "^Benchmark"
+  ],
+  "exclude": [],
+  "maxBenchmarks": 500,
+  "groups": {
+    "parsing": {
+      "title": "Parsing",
+      "match": [
+        "^Parse"
+      ],
+      "chart": "combined"
+    },
+    "grouping": {
+      "title": "Grouping",
+      "match": [
+        "^Group"
+      ],
+      "chart": "combined"
+    },
+    "validation": {
+      "title": "Validation",
+      "match": [
+        "^Validate"
+      ],
+      "chart": "combined"
+    },
+    "bundles": {
+      "title": "Bundles",
+      "match": [
+        "Bundle$"
+      ],
+      "chart": "single"
+    }
+  },
+  "views": {
+    "bundles": {
+      "title": "Action bundle sizes",
+      "select": {
+        "groups": [
+          "^bundles$"
+        ]
+      },
+      "table": {
+        "rows": [
+          "benchmark"
+        ],
+        "columns": [
+          "metric"
+        ],
+        "collapsed": false,
+        "missing": "error",
+        "empty": "hide",
+        "max-rows": 200,
+        "dimensions": {
+          "benchmark": {
+            "title": "Bundle",
+            "trim-prefix": "Benchmark"
+          }
+        },
+        "metrics": {
+          "binary-bytes": {
+            "title": "Size",
+            "format": "bytes"
+          }
+        }
+      }
+    },
+    "operations": {
+      "title": "Parser and validation operations",
+      "select": {
+        "groups": [
+          "^(parsing|grouping|validation)$"
+        ]
+      },
+      "table": {
+        "rows": [
+          "group",
+          "benchmark"
+        ],
+        "columns": [
+          "metric"
+        ],
+        "collapsed": true,
+        "missing": "error",
+        "empty": "hide",
+        "max-rows": 200,
+        "dimensions": {
+          "benchmark": {
+            "trim-prefix": "Benchmark"
+          }
+        },
+        "metrics": {
+          "ns/op": {
+            "title": "Median time",
+            "format": "auto"
+          }
+        }
+      }
+    }
+  }
+}
