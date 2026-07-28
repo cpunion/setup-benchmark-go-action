@@ -68,3 +68,91 @@ test("include and exclude accept package-qualified short names", () => {
     false,
   );
 });
+
+test("normalizes generic pivot view configuration", () => {
+  const config = new Config({
+    id: "views",
+    views: {
+      programs: {
+        title: "Program measurements",
+        select: {
+          groups: "^programs$",
+          benchmarks: "^Program/",
+        },
+        table: {
+          rows: ["platform", "benchmark"],
+          columns: "metric",
+          collapsed: false,
+          missing: "error",
+          empty: "error",
+          "max-rows": 50,
+          dimensions: {
+            benchmark: {
+              title: "Workload",
+              "trim-prefix": "BenchmarkProgram/",
+            },
+          },
+          metrics: {
+            "binary-bytes": { title: "File size", format: "bytes" },
+            "build-ns": { title: "Build", format: "duration-ns" },
+          },
+        },
+      },
+    },
+  });
+
+  const snapshot = config.toJSON();
+  assert.deepEqual(snapshot.views.programs.table.rows, [
+    "platform",
+    "benchmark",
+  ]);
+  assert.equal(
+    snapshot.views.programs.table.dimensions.benchmark["trim-prefix"],
+    "BenchmarkProgram/",
+  );
+  assert.equal(
+    snapshot.views.programs.table.metrics["build-ns"].format,
+    "duration-ns",
+  );
+  assert.deepEqual(new Config(snapshot).toJSON(), snapshot);
+});
+
+test("rejects ambiguous or unsupported view layouts", () => {
+  assert.throws(
+    () =>
+      new Config({
+        id: "duplicate",
+        views: {
+          bad: {
+            table: {
+              rows: ["platform", "metric"],
+              columns: ["metric"],
+            },
+          },
+        },
+      }),
+    /uses dimension metric more than once/u,
+  );
+  assert.throws(
+    () =>
+      new Config({
+        id: "format",
+        views: {
+          bad: {
+            table: {
+              metrics: { "ns/op": { format: "printf-expression" } },
+            },
+          },
+        },
+      }),
+    /unsupported value/u,
+  );
+  assert.throws(
+    () =>
+      new Config({
+        id: "selector",
+        views: { bad: { select: { benchmarks: "Core(?=Read)" } } },
+      }),
+    /pattern/u,
+  );
+});

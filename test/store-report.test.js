@@ -139,3 +139,296 @@ test("keeps valid history when grouping and chart configuration evolves", () => 
     3,
   );
 });
+
+test("uses history written before comment views as a matching baseline", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-old-view-"));
+  const original = new Config({
+    id: "history",
+    groups: { core: "^Core" },
+  });
+  const withView = new Config({
+    id: "history",
+    groups: { core: "^Core" },
+    views: {
+      core: {
+        select: { groups: "^core$" },
+        table: {
+          rows: ["platform", "benchmark"],
+          columns: ["metric"],
+        },
+      },
+    },
+  });
+  update(root, original, { kind: "main", id: "main", label: "Main" }, [
+    result("7777777777777777777777777777777777777777", 10),
+  ]);
+  const updated = update(
+    root,
+    withView,
+    { kind: "pull", id: "8", label: "PR #8" },
+    [result("8888888888888888888888888888888888888888", 9)],
+  );
+  const comment = path.join(root, "comment.md");
+  writeReport(comment, "", withView, updated.entry, updated.main);
+  const body = fs.readFileSync(comment, "utf8");
+  assert.match(body, /\| Linux \/ amd64 \| BenchmarkCore \| 9 ns\/op/u);
+  assert.match(body, /-10\.0% \(better\)/u);
+});
+
+function viewPlatform(id, label, sha, program, core) {
+  return {
+    schemaVersion: 1,
+    suiteId: "views",
+    shardId: "merged",
+    source: {
+      repository: "owner/project",
+      sha,
+      url: `https://github.com/owner/project/commit/${sha}`,
+      runUrl: "https://github.com/owner/project/actions/runs/2",
+      timestamp: "2026-07-28T00:00:00.000Z",
+    },
+    platform: { id, label },
+    units: {
+      "binary-bytes": { better: "lower", assume: "exact" },
+      "build-ns": { better: "lower" },
+      "run-ns": { better: "lower" },
+      "ns/op": { better: "lower" },
+    },
+    benchmarks: [
+      {
+        name: "BenchmarkProgram/cprintf",
+        group: "programs",
+        chart: "group:programs",
+        samples: [{ iterations: 1, measurements: program }],
+        measurements: program,
+      },
+      {
+        name: "BenchmarkDirectCall",
+        group: "core",
+        chart: "group:core",
+        samples: [{ iterations: 100, measurements: { "ns/op": core } }],
+        measurements: { "ns/op": core },
+      },
+    ],
+  };
+}
+
+function viewEntry(sha, values) {
+  return {
+    source: {
+      repository: "owner/project",
+      sha,
+      url: `https://github.com/owner/project/commit/${sha}`,
+      runUrl: "https://github.com/owner/project/actions/runs/2",
+      timestamp: "2026-07-28T00:00:00.000Z",
+    },
+    platforms: Object.fromEntries(
+      values.map((value) => [
+        value.id,
+        viewPlatform(value.id, value.label, sha, value.program, value.core),
+      ]),
+    ),
+  };
+}
+
+test("renders selected measurements as generic pivot and collapsed tables", () => {
+  const config = new Config({
+    id: "views",
+    title: "View report",
+    groups: {
+      programs: "^Program/",
+      core: "^Direct",
+    },
+    views: {
+      programs: {
+        title: "Program measurements",
+        select: { groups: "^programs$" },
+        table: {
+          rows: ["platform", "benchmark"],
+          columns: ["metric"],
+          missing: "error",
+          dimensions: {
+            benchmark: {
+              title: "Workload",
+              "trim-prefix": "BenchmarkProgram/",
+            },
+          },
+          metrics: {
+            "binary-bytes": { title: "File size", format: "bytes" },
+            "build-ns": { title: "Build", format: "duration-ns" },
+            "run-ns": { title: "Run", format: "duration-ns" },
+          },
+        },
+      },
+      core: {
+        title: "Core language benchmarks",
+        select: { groups: "^core$" },
+        table: {
+          rows: ["platform", "benchmark"],
+          columns: ["metric"],
+          collapsed: true,
+        },
+      },
+    },
+  });
+  const mainSHA = "9999999999999999999999999999999999999999";
+  const pullSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const main = viewEntry(mainSHA, [
+    {
+      id: "linux-amd64",
+      label: "Linux",
+      program: {
+        "binary-bytes": 18_000,
+        "build-ns": 400_000_000,
+        "run-ns": 1_000_000,
+      },
+      core: 2,
+    },
+    {
+      id: "darwin-arm64",
+      label: "macOS",
+      program: {
+        "binary-bytes": 80_000,
+        "build-ns": 500_000_000,
+        "run-ns": 2_000_000,
+      },
+      core: 1,
+    },
+  ]);
+  const current = viewEntry(pullSHA, [
+    {
+      id: "linux-amd64",
+      label: "Linux",
+      program: {
+        "binary-bytes": 18_264,
+        "build-ns": 354_926_000,
+        "run-ns": 1_274_000,
+      },
+      core: 1.5,
+    },
+    {
+      id: "darwin-arm64",
+      label: "macOS",
+      program: {
+        "binary-bytes": 84_752,
+        "build-ns": 440_208_000,
+        "run-ns": 4_072_000,
+      },
+      core: 0.9,
+    },
+  ]);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-views-"));
+  const comment = path.join(root, "comment.md");
+  writeReport(comment, "https://example.test/charts", config, current, main);
+  const body = fs.readFileSync(comment, "utf8");
+
+  assert.match(
+    body,
+    /\| Platform \| Workload \| File size \| vs main \| Build \| vs main \| Run \| vs main \|/u,
+  );
+  assert.match(
+    body,
+    /\| Linux \| cprintf \| 18264 B \| \+1\.5% \(worse\) \| 354\.926 ms \| -11\.3% \(better\) \| 1\.274 ms \| \+27\.4% \(worse\) \|/u,
+  );
+  assert.match(body, /<summary>Core language benchmarks<\/summary>/u);
+  assert.match(body, /\| macOS \| BenchmarkDirectCall \| 0\.900 ns\/op/u);
+});
+
+test("supports split dimensions and enforces pivot cell completeness", () => {
+  const sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  const current = viewEntry(sha, [
+    {
+      id: "linux-amd64",
+      label: "Linux",
+      program: {
+        "binary-bytes": 18_264,
+        "build-ns": 354_926_000,
+        "run-ns": 1_274_000,
+      },
+      core: 1.5,
+    },
+    {
+      id: "darwin-arm64",
+      label: "macOS",
+      program: {
+        "binary-bytes": 84_752,
+        "build-ns": 440_208_000,
+        "run-ns": 4_072_000,
+      },
+      core: 0.9,
+    },
+  ]);
+  const split = new Config({
+    id: "views",
+    groups: { programs: "^Program/", core: "^Direct" },
+    views: {
+      programs: {
+        select: { groups: "^programs$" },
+        table: {
+          rows: ["benchmark"],
+          columns: ["metric"],
+          "split-by": ["platform"],
+          missing: "error",
+        },
+      },
+    },
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-split-"));
+  const comment = path.join(root, "comment.md");
+  writeReport(comment, "", split, current, null);
+  const body = fs.readFileSync(comment, "utf8");
+  assert.match(body, /#### Platform: Linux/u);
+  assert.match(body, /#### Platform: macOS/u);
+
+  const ambiguous = new Config({
+    id: "views",
+    groups: { programs: "^Program/", core: "^Direct" },
+    views: {
+      programs: {
+        select: { groups: "^programs$" },
+        table: { rows: ["benchmark"], columns: ["metric"] },
+      },
+    },
+  });
+  assert.throws(
+    () =>
+      writeReport(
+        path.join(root, "ambiguous.md"),
+        "",
+        ambiguous,
+        current,
+        null,
+      ),
+    /duplicate cell/u,
+  );
+
+  const incomplete = JSON.parse(JSON.stringify(current));
+  delete incomplete.platforms["linux-amd64"].benchmarks[0].measurements[
+    "run-ns"
+  ];
+  const strict = new Config({
+    id: "views",
+    groups: { programs: "^Program/", core: "^Direct" },
+    views: {
+      programs: {
+        select: { groups: "^programs$" },
+        table: {
+          rows: ["platform", "benchmark"],
+          columns: ["metric"],
+          missing: "error",
+        },
+      },
+    },
+  });
+  assert.throws(
+    () =>
+      writeReport(
+        path.join(root, "incomplete.md"),
+        "",
+        strict,
+        incomplete,
+        null,
+      ),
+    /missing cell/u,
+  );
+});
