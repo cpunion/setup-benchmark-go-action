@@ -379,6 +379,11 @@ test("supports split dimensions and enforces pivot cell completeness", () => {
   const body = fs.readFileSync(comment, "utf8");
   assert.match(body, /#### Platform: Linux/u);
   assert.match(body, /#### Platform: macOS/u);
+  assert.match(body, /\| new \|/u);
+  assert.match(
+    body,
+    /No main baseline exists yet; all metrics are marked `new`/u,
+  );
 
   const ambiguous = new Config({
     id: "views",
