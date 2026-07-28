@@ -16,7 +16,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: true
+          cache: npm
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - name: Check source
         run: npm run check
