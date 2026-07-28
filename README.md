@@ -138,11 +138,151 @@ groups:
 | `groups.<id>.title` | title-cased ID       | Display title.                                                     |
 | `groups.<id>.match` | required             | RE2 pattern or pattern list.                                       |
 | `groups.<id>.chart` | `combined`           | `combined` or `single`.                                            |
+| `views`             | none                 | Optional pivot tables for the pull request comment.                |
 
 A benchmark may match at most one group. Overlap is rejected instead of
 silently selecting a group. Included benchmarks that match no group remain
 visible under **Other**, with a separate chart for each benchmark. This lets new
 benchmarks appear without first changing configuration.
+
+## Comment Views
+
+Without `views`, the pull request comment uses the default long form:
+
+```text
+Group | Benchmark | Metric | Current | vs main
+```
+
+Views provide a constrained data pivot for richer reports. They do not change
+the artifact schema, stored history, or Pages charts. Each measurement is an
+observation with five available dimensions:
+
+- `platform`
+- `package`
+- `group`
+- `benchmark`
+- `metric`
+
+A view selects observations and places dimensions in table rows, columns, or
+split sections. This layout produces one row per platform and workload, with
+file size, build time, and run time as columns:
+
+```yaml
+groups:
+  programs: "^Program/"
+  core: "^Core"
+
+views:
+  programs:
+    title: Program measurements
+    select:
+      groups: "^programs$"
+    table:
+      rows: [platform, benchmark]
+      columns: [metric]
+      missing: error
+      dimensions:
+        benchmark:
+          title: Workload
+          trim-prefix: BenchmarkProgram/
+      metrics:
+        binary-bytes:
+          title: File size
+          format: bytes
+        build-ns:
+          title: Build
+          format: duration-ns
+        run-ns:
+          title: Run
+          format: duration-ns
+
+  core:
+    title: Core language and compiler benchmarks
+    select:
+      groups: "^core$"
+    table:
+      rows: [platform, benchmark]
+      columns: [metric]
+      collapsed: true
+```
+
+The corresponding standard benchmark record may contain several metrics:
+
+```text
+Unit binary-bytes better=lower assume=exact
+Unit build-ns better=lower
+Unit run-ns better=lower
+BenchmarkProgram/cprintf 1 18264 binary-bytes 354926000 build-ns 1274000 run-ns
+```
+
+### View Selection
+
+`select` accepts one RE2 pattern or a pattern list for each dimension:
+
+| Selector     | Matched values                                          |
+| ------------ | ------------------------------------------------------- |
+| `platforms`  | Platform ID and display label.                          |
+| `packages`   | Go package path.                                        |
+| `groups`     | Group ID and display title.                             |
+| `benchmarks` | Full key, benchmark name, and name without `Benchmark`. |
+| `metrics`    | Metric or unit name.                                    |
+
+Selectors within one field are ORed; different fields are ANDed. Observations
+may intentionally appear in more than one view.
+
+### Table Layout
+
+| Field        | Default                 | Meaning                                                            |
+| ------------ | ----------------------- | ------------------------------------------------------------------ |
+| `rows`       | `[platform, benchmark]` | Dimensions identifying each table row.                             |
+| `columns`    | `[metric]`              | Dimensions expanded into value and `vs main` column pairs.         |
+| `split-by`   | none                    | Dimensions that produce separate tables inside the view.           |
+| `collapsed`  | `false`                 | Put the view in a Markdown `<details>` section.                    |
+| `missing`    | `blank`                 | Use `blank` for `-` cells or `error` to require a complete matrix. |
+| `empty`      | `hide`                  | Use `hide` or fail with `error` when selection is empty.           |
+| `max-rows`   | `200`                   | Per-table row limit, from 1 through 1000.                          |
+| `dimensions` | none                    | Override dimension titles or trim a literal value prefix.          |
+| `metrics`    | none                    | Override metric titles, ordering, and display formats.             |
+
+Every dimension may be used at most once across `rows`, `columns`, and
+`split-by`. If omitted dimensions make two observations resolve to the same
+cell, rendering fails instead of choosing one result. `missing: error` also
+turns a sparse pivot into an explicit failure.
+
+Platforms can be columns instead of rows:
+
+```yaml
+table:
+  rows: [benchmark, metric]
+  columns: [platform]
+```
+
+Or each platform can have its own compact table:
+
+```yaml
+table:
+  rows: [benchmark]
+  columns: [metric]
+  split-by: [platform]
+```
+
+Metric configuration is optional. Listed metrics appear first in declaration
+order; other selected metrics follow alphabetically. Supported formats are:
+
+| Format        | Meaning                                    |
+| ------------- | ------------------------------------------ |
+| `auto`        | Number followed by its metric name.        |
+| `number`      | Number without a unit suffix.              |
+| `bytes`       | Exact byte value with `B`.                 |
+| `duration-ns` | Duration whose input unit is nanoseconds.  |
+| `duration-us` | Duration whose input unit is microseconds. |
+| `duration-ms` | Duration whose input unit is milliseconds. |
+| `duration-s`  | Duration whose input unit is seconds.      |
+
+Duration formats choose a readable `ns`, `us`, `ms`, or `s` display unit. The
+underlying value and historical comparison remain in the original metric.
+Reports that exceed GitHub's comment size limit fail with a clear error; use
+selectors, split views, or Pages for larger suites.
 
 ## Measurements
 
