@@ -411,14 +411,24 @@ jobs:
     with:
       run_id: ${{ github.event.workflow_run.id }}
       data_repository: owner/project-benchmark-data
+      data_dispatch_event: go-benchmarks-published
       config_path: .github/project-benchmark.yml
     secrets:
       data_token: ${{ secrets.BENCHMARK_DATA_TOKEN }}
 ```
 
-`data_token` needs contents write access to the data repository. Configure Pages
-there from its `pages` branch. If the Pages URL is nonstandard, set
-`site_base_url`.
+`data_token` needs contents write access to the data repository. The optional
+`data_dispatch_event` sends a `repository_dispatch` event to that repository
+after its data is ready, using the same token. Configure Pages there from its
+`pages` branch or handle that event with a Pages deployment workflow. If the
+Pages URL is nonstandard, set `site_base_url`.
+
+An external repository and token are optional for pull request reporting. If
+the token is missing, the repository cannot be checked out for writing, the
+push fails, or the deployment notification fails, the publisher keeps the
+rendered preview and adds a warning to its pull request comment instead of
+failing. Artifact download, trusted configuration, source validation, and
+rendering errors still fail the workflow.
 
 ## Recorder Reference
 
@@ -443,18 +453,19 @@ there from its `pages` branch. If the Pages URL is nonstandard, set
 Call
 `xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1` as a job.
 
-| Input              | Required | Default                    | Meaning                                               |
-| ------------------ | -------- | -------------------------- | ----------------------------------------------------- |
-| `run_id`           | yes      |                            | Workflow run containing recorder artifacts.           |
-| `data_repository`  | no       | caller repository          | Repository containing the data branch and Pages site. |
-| `data_branch`      | no       | `pages`                    | Data and Pages branch.                                |
-| `site_base_url`    | no       | derived from repository    | Public Pages root URL.                                |
-| `artifact_pattern` | no       | `go-benchmark-*`           | Artifact download glob.                               |
-| `config_path`      | no       | `.github/go-benchmark.yml` | Trusted default-branch config for fork PRs.           |
+| Input                 | Required | Default                    | Meaning                                                |
+| --------------------- | -------- | -------------------------- | ------------------------------------------------------ |
+| `run_id`              | yes      |                            | Workflow run containing recorder artifacts.            |
+| `data_repository`     | no       | caller repository          | Repository containing the data branch and Pages site.  |
+| `data_branch`         | no       | `pages`                    | Data and Pages branch.                                 |
+| `data_dispatch_event` | no       |                            | Event sent to the data repository after data is ready. |
+| `site_base_url`       | no       | derived from repository    | Public Pages root URL.                                 |
+| `artifact_pattern`    | no       | `go-benchmark-*`           | Artifact download glob.                                |
+| `config_path`         | no       | `.github/go-benchmark.yml` | Trusted default-branch config for fork PRs.            |
 
-| Secret       | Required                 | Meaning                                                |
-| ------------ | ------------------------ | ------------------------------------------------------ |
-| `data_token` | external repository only | Token with contents write access to `data_repository`. |
+| Secret       | Required | Meaning                                                          |
+| ------------ | -------- | ---------------------------------------------------------------- |
+| `data_token` | no       | Token with contents write access to an external data repository. |
 
 Recommended publisher permissions are `actions: read`, `contents: write`,
 `issues: write`, and `pull-requests: write`. GitHub may reduce permissions

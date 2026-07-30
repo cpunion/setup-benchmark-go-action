@@ -15,6 +15,10 @@ on:
         description: Data and Pages branch.
         default: pages
         type: string
+      data_dispatch_event:
+        description: Optional repository_dispatch event sent after data is ready.
+        default: ""
+        type: string
       site_base_url:
         description: Optional Pages root URL.
         default: ""
@@ -160,20 +164,25 @@ jobs:
           sparse-checkout: ${{ inputs.config_path }}
           sparse-checkout-cone-mode: false
 
-      - name: Require external data token
-        if: >-
-          steps.source.outputs.publish == 'true' &&
-          steps.source.outputs.same-data-repository != 'true'
+      - name: Check benchmark data write access
+        id: data-access
         env:
           DATA_TOKEN: ${{ secrets.data_token }}
+          PUBLISH: ${{ steps.source.outputs.publish }}
+          SAME_DATA_REPOSITORY: ${{ steps.source.outputs.same-data-repository }}
         run: |
-          if [[ -z "$DATA_TOKEN" ]]; then
-            echo "data_token is required for an external data_repository" >&2
-            exit 1
+          set -euo pipefail
+          writable=false
+          if [[ "$PUBLISH" == true ]] &&
+            [[ "$SAME_DATA_REPOSITORY" == true || -n "$DATA_TOKEN" ]]; then
+            writable=true
           fi
+          echo "writable=$writable" >> "$GITHUB_OUTPUT"
 
       - name: Check out writable benchmark data
-        if: steps.source.outputs.publish == 'true'
+        id: data-checkout
+        if: steps.data-access.outputs.writable == 'true'
+        continue-on-error: true
         uses: actions/checkout@v7
         with:
           repository: ${{ steps.source.outputs.data-repository }}
@@ -184,15 +193,21 @@ jobs:
           fetch-depth: 1
 
       - name: Check out public benchmark data for preview
-        if: steps.source.outputs.publish != 'true'
+        id: preview-data
+        if: steps.data-checkout.outcome != 'success'
         env:
           DATA_REPOSITORY: ${{ steps.source.outputs.data-repository }}
         run: |
           set -euo pipefail
-          if ! git clone --depth=1 "https://github.com/$DATA_REPOSITORY.git" benchmark-data; then
+          rm -rf "$GITHUB_WORKSPACE/benchmark-data"
+          if git clone --depth=1 "https://github.com/$DATA_REPOSITORY.git" benchmark-data; then
+            echo "history-loaded=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -rf "$GITHUB_WORKSPACE/benchmark-data"
             mkdir benchmark-data
             git -C benchmark-data init
             git -C benchmark-data remote add origin "https://github.com/$DATA_REPOSITORY.git"
+            echo "history-loaded=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Select data branch
@@ -210,12 +225,11 @@ jobs:
 
       - name: Resolve Pages URL
         id: pages
-        env:
-          CONFIGURED_URL: ${{ inputs.site_base_url }}
-          DATA_REPOSITORY: ${{ steps.source.outputs.data-repository }}
         run: |
           set -euo pipefail
-          if [[ -n "$CONFIGURED_URL" ]]; then
+          if [[ "$HISTORY_AVAILABLE" != true ]]; then
+            url=""
+          elif [[ -n "$CONFIGURED_URL" ]]; then
             url="${CONFIGURED_URL%/}"
           else
             owner="${DATA_REPOSITORY%%/*}"
@@ -227,6 +241,12 @@ jobs:
             fi
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
+        env:
+          CONFIGURED_URL: ${{ inputs.site_base_url }}
+          DATA_REPOSITORY: ${{ steps.source.outputs.data-repository }}
+          HISTORY_AVAILABLE: >-
+            ${{ steps.data-checkout.outcome == 'success' ||
+                steps.preview-data.outputs.history-loaded == 'true' }}
 
       - name: Render benchmark history
         id: render
@@ -264,23 +284,10 @@ jobs:
                 github.event.workflow_run.created_at }}
           comment-path: ${{ runner.temp }}/go-benchmark-comment.md
 
-      - name: Upload rendered preview
-        uses: actions/upload-artifact@v7
-        with:
-          name: go-benchmark-preview-${{ steps.render.outputs.suite-id }}
-          path: |
-            ${{ steps.render.outputs.site-path }}
-            ${{ steps.render.outputs.comment-path }}
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Add report to job summary
-        env:
-          COMMENT_PATH: ${{ steps.render.outputs.comment-path }}
-        run: cat "$COMMENT_PATH" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Commit benchmark data
-        if: steps.source.outputs.publish == 'true'
+        id: data-publish
+        if: steps.data-checkout.outcome == 'success'
+        continue-on-error: true
         working-directory: benchmark-data
         env:
           DATA_BRANCH: ${{ inputs.data_branch }}
@@ -296,6 +303,7 @@ jobs:
             )"
             if [[ "$current_head" != "$SOURCE_SHA" ]]; then
               echo "skip stale benchmark data for $SOURCE_SHA; pull request is at $current_head"
+              echo "ready=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
@@ -303,10 +311,120 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add --all
           if git diff --cached --quiet; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m "benchmarks: update ${SOURCE_SHA:0:12}"
           git push origin "HEAD:$DATA_BRANCH"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Notify benchmark data repository
+        id: data-dispatch
+        if: >-
+          steps.data-publish.outcome == 'success' &&
+          steps.data-publish.outputs.ready == 'true' &&
+          inputs.data_dispatch_event != ''
+        continue-on-error: true
+        env:
+          DATA_BRANCH: ${{ inputs.data_branch }}
+          DATA_REPOSITORY: ${{ steps.source.outputs.data-repository }}
+          DISPATCH_EVENT: ${{ inputs.data_dispatch_event }}
+          GH_TOKEN: >-
+            ${{ steps.source.outputs.same-data-repository == 'true' &&
+                github.token || secrets.data_token }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          SOURCE_RUN_URL: >-
+            ${{ format(
+                '{0}/{1}/actions/runs/{2}',
+                github.server_url,
+                github.repository,
+                inputs.run_id) }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          jq -cn \
+            --arg event_type "$DISPATCH_EVENT" \
+            --arg source_repository "$SOURCE_REPOSITORY" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_run_url "$SOURCE_RUN_URL" \
+            --arg data_branch "$DATA_BRANCH" \
+            '{
+              event_type: $event_type,
+              client_payload: {
+                source_repository: $source_repository,
+                source_sha: $source_sha,
+                source_run_url: $source_run_url,
+                data_branch: $data_branch
+              }
+            }' |
+            gh api --method POST "repos/${DATA_REPOSITORY}/dispatches" --input -
+
+      - name: Add publishing status to report
+        env:
+          COMMENT_PATH: ${{ steps.render.outputs.comment-path }}
+          DATA_CHECKOUT_OUTCOME: ${{ steps.data-checkout.outcome }}
+          DATA_DISPATCH_EVENT: ${{ inputs.data_dispatch_event }}
+          DATA_DISPATCH_OUTCOME: ${{ steps.data-dispatch.outcome }}
+          DATA_PUBLISH_OUTCOME: ${{ steps.data-publish.outcome }}
+          DATA_PUBLISH_READY: ${{ steps.data-publish.outputs.ready }}
+          HISTORY_LOADED: ${{ steps.preview-data.outputs.history-loaded }}
+          PUBLISH: ${{ steps.source.outputs.publish }}
+          WRITE_CONFIGURED: ${{ steps.data-access.outputs.writable }}
+        run: |
+          set -euo pipefail
+          warnings=()
+          if [[ "$PUBLISH" == true ]]; then
+            if [[ "$WRITE_CONFIGURED" != true ]]; then
+              warnings+=(
+                "Persistent publishing is unavailable because no data token is configured."
+              )
+            elif [[ "$DATA_CHECKOUT_OUTCOME" != success ]]; then
+              warnings+=(
+                "Persistent publishing is unavailable because the data repository could not be checked out for writing."
+              )
+            elif [[ "$DATA_PUBLISH_OUTCOME" != success ]]; then
+              warnings+=(
+                "The rendered benchmark data could not be pushed."
+              )
+            elif [[ -n "$DATA_DISPATCH_EVENT" ]] &&
+              [[ "$DATA_PUBLISH_READY" == true ]] &&
+              [[ "$DATA_DISPATCH_OUTCOME" != success ]]; then
+              warnings+=(
+                "Benchmark data was saved, but the Pages deployment notification failed."
+              )
+            fi
+          fi
+          if [[ "$DATA_CHECKOUT_OUTCOME" != success ]] &&
+            [[ "$HISTORY_LOADED" != true ]]; then
+            warnings+=(
+              "Existing benchmark history was unavailable, so this preview starts with an empty history."
+            )
+          fi
+          if ((${#warnings[@]} == 0)); then
+            exit 0
+          fi
+          {
+            echo
+            echo "> [!WARNING]"
+            for warning in "${warnings[@]}"; do
+              printf "> - %s\n" "$warning"
+            done
+          } >> "$COMMENT_PATH"
+
+      - name: Upload rendered preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-benchmark-preview-${{ steps.render.outputs.suite-id }}
+          path: |
+            ${{ steps.render.outputs.site-path }}
+            ${{ steps.render.outputs.comment-path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Add report to job summary
+        env:
+          COMMENT_PATH: ${{ steps.render.outputs.comment-path }}
+        run: cat "$COMMENT_PATH" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create or update PR comment
         if: steps.source.outputs.kind == 'pull'
