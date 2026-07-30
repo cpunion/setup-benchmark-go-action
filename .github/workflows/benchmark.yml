@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
       - name: Run self benchmarks
         run: node scripts/benchmark.js | tee benchmark.txt
-      - uses: cpunion/setup-benchmark-go-action@main
+      - uses: ./
         with:
           config: .github/go-benchmark.yml
           benchmark-file: benchmark.txt

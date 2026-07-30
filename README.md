@@ -61,7 +61,7 @@ jobs:
           go-version-file: go.mod
       - name: Run benchmarks
         run: go test -run '^$' -bench '^Benchmark' -benchmem -count=5 ./... | tee benchmark.txt
-      - uses: cpunion/setup-benchmark-go-action@v1
+      - uses: xgo-dev/setup-benchmark-go-action@v1
         with:
           config: .github/go-benchmark.yml
           benchmark-file: benchmark.txt
@@ -87,7 +87,7 @@ permissions:
 jobs:
   publish:
     if: github.event.workflow_run.conclusion == 'success'
-    uses: cpunion/setup-benchmark-go-action/.github/workflows/publish.yml@v1
+    uses: xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1
     with:
       run_id: ${{ github.event.workflow_run.id }}
 ```
@@ -351,7 +351,7 @@ strategy:
     suite: [core, storage]
 steps:
   - run: go test -run '^$' -bench . -count=5 ./bench/${{ matrix.suite }} | tee benchmark.txt
-  - uses: cpunion/setup-benchmark-go-action@v1
+  - uses: xgo-dev/setup-benchmark-go-action@v1
     with:
       config: .github/go-benchmark.yml
       benchmark-file: benchmark.txt
@@ -368,7 +368,7 @@ Set them explicitly for cross compilation, virtual environments, or a Go
 version matrix:
 
 ```yaml
-- uses: cpunion/setup-benchmark-go-action@v1
+- uses: xgo-dev/setup-benchmark-go-action@v1
   with:
     config: .github/go-benchmark.yml
     benchmark-file: benchmark.txt
@@ -407,7 +407,7 @@ The default `pages` branch can live in another repository:
 jobs:
   publish:
     if: github.event.workflow_run.conclusion == 'success'
-    uses: cpunion/setup-benchmark-go-action/.github/workflows/publish.yml@v1
+    uses: xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1
     with:
       run_id: ${{ github.event.workflow_run.id }}
       data_repository: owner/project-benchmark-data
@@ -441,7 +441,7 @@ there from its `pages` branch. If the Pages URL is nonstandard, set
 ## Publisher Reference
 
 Call
-`cpunion/setup-benchmark-go-action/.github/workflows/publish.yml@v1` as a job.
+`xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1` as a job.
 
 | Input              | Required | Default                    | Meaning                                               |
 | ------------------ | -------- | -------------------------- | ----------------------------------------------------- |

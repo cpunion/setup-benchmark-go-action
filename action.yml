@@ -1,5 +1,5 @@
 name: Setup Benchmark Go
-author: cpunion
+author: xgo-dev
 description: Parse, group, and publish Go benchmark history from GitHub Actions.
 
 inputs:

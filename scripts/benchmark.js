@@ -22,7 +22,7 @@ function benchmarkText() {
   const lines = [
     "goos: linux",
     "goarch: amd64",
-    "pkg: github.com/cpunion/setup-benchmark-go-action",
+    "pkg: github.com/xgo-dev/setup-benchmark-go-action",
   ];
   for (let index = 0; index < 40; index += 1) {
     lines.push(
@@ -40,9 +40,9 @@ const artifact = {
   suiteId: "self",
   shardId: "benchmark",
   source: {
-    repository: "cpunion/setup-benchmark-go-action",
+    repository: "xgo-dev/setup-benchmark-go-action",
     sha: "1111111111111111111111111111111111111111",
-    url: "https://github.com/cpunion/setup-benchmark-go-action/commit/1111111111111111111111111111111111111111",
+    url: "https://github.com/xgo-dev/setup-benchmark-go-action/commit/1111111111111111111111111111111111111111",
     timestamp: "2026-07-28T00:00:00.000Z",
   },
   platform: { id: "linux-amd64", label: "Linux / amd64" },
@@ -92,7 +92,7 @@ const goos = { win32: "windows" }[process.platform] ?? process.platform;
 const goarch = { x64: "amd64", ia32: "386" }[process.arch] ?? process.arch;
 console.log(`goos: ${goos}`);
 console.log(`goarch: ${goarch}`);
-console.log("pkg: github.com/cpunion/setup-benchmark-go-action");
+console.log("pkg: github.com/xgo-dev/setup-benchmark-go-action");
 console.log("Unit ns/op better=lower");
 console.log("Unit binary-bytes better=lower assume=exact");
 
