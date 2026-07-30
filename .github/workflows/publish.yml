@@ -79,9 +79,16 @@ jobs:
           [[ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]] || same_repository=true
           if [[ "$RUN_EVENT" == pull_request ]]; then
             if [[ -z "$PR_NUMBER" ]]; then
+              head_owner="${HEAD_REPOSITORY%%/*}"
               PR_NUMBER="$(
-                gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/pulls" \
-                  --jq '[.[] | select(.state == "open")][0].number // empty'
+                gh api --method GET "repos/${GITHUB_REPOSITORY}/pulls" \
+                  -f state=open \
+                  -f "head=${head_owner}:${HEAD_BRANCH}" \
+                  --jq '[.[] | select(
+                    .head.repo.full_name == env.HEAD_REPOSITORY and
+                    .head.ref == env.HEAD_BRANCH and
+                    .head.sha == env.HEAD_SHA
+                  )][0].number // empty'
               )"
             fi
             if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
