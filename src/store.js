@@ -249,4 +249,4 @@ function update(dataRoot, config, series, results) {
   };
 }
 
-module.exports = { latestMatchingPlatforms, update };
+module.exports = { entryFromResults, latestMatchingPlatforms, update };

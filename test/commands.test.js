@@ -8,11 +8,13 @@ const test = require("node:test");
 const { runRecord, runRender } = require("../src/commands");
 
 const sha = "abcdef1234567890abcdef1234567890abcdef12";
+const baselineSHA = "1234567890abcdef1234567890abcdef12345678";
 
 test("records and renders without invoking a Go toolchain", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-command-"));
   const config = path.join(root, "benchmark.yml");
   const input = path.join(root, "benchmark.txt");
+  const baselineInput = path.join(root, "baseline.txt");
   const artifact = path.join(root, "artifact");
   const output = path.join(root, "record-output");
   fs.writeFileSync(
@@ -25,11 +27,25 @@ test("records and renders without invoking a Go toolchain", () => {
       "\n",
     ),
   );
+  fs.writeFileSync(
+    baselineInput,
+    ["goos: linux", "goarch: amd64", "BenchmarkCore-8 10 3 ns/op", ""].join(
+      "\n",
+    ),
+  );
   runRecord([
     "--config",
     config,
     "--input",
     input,
+    "--baseline-input",
+    baselineInput,
+    "--baseline-repository",
+    "owner/project",
+    "--baseline-sha",
+    baselineSHA,
+    "--baseline-ref",
+    "main",
     "--output-dir",
     artifact,
     "--repository",
@@ -79,7 +95,11 @@ test("records and renders without invoking a Go toolchain", () => {
     "--comment",
     comment,
   ]);
-  assert.match(fs.readFileSync(comment, "utf8"), /No main baseline/u);
+  const report = fs.readFileSync(comment, "utf8");
+  assert.match(report, /-33\.3% \(better\)/u);
+  assert.match(report, /vs base/u);
+  assert.match(report, /measured in the same runner job/u);
+  assert.match(report, new RegExp(baselineSHA.slice(0, 12), "u"));
   assert.equal(
     fs.existsSync(
       path.join(
@@ -201,10 +221,12 @@ test("records pull request head metadata from the GitHub event", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-event-"));
   const config = path.join(root, "benchmark.yml");
   const input = path.join(root, "benchmark.txt");
+  const baselineInput = path.join(root, "baseline.txt");
   const event = path.join(root, "event.json");
   const artifact = path.join(root, "artifact");
   fs.writeFileSync(config, "id: event\n");
   fs.writeFileSync(input, "BenchmarkEvent-8 10 1 ns/op\n");
+  fs.writeFileSync(baselineInput, "BenchmarkEvent-8 10 2 ns/op\n");
   fs.writeFileSync(
     event,
     JSON.stringify({
@@ -214,6 +236,11 @@ test("records pull request head metadata from the GitHub event", () => {
           sha,
           repo: { full_name: "fork/project" },
         },
+        base: {
+          ref: "main",
+          sha: baselineSHA,
+          repo: { full_name: "owner/project" },
+        },
       },
     }),
   );
@@ -222,7 +249,16 @@ test("records pull request head metadata from the GitHub event", () => {
   let recorded;
   try {
     recorded = runRecord(
-      ["--config", config, "--input", input, "--output-dir", artifact],
+      [
+        "--config",
+        config,
+        "--input",
+        input,
+        "--baseline-input",
+        baselineInput,
+        "--output-dir",
+        artifact,
+      ],
       { githubOutput: "" },
     );
   } finally {
@@ -235,6 +271,15 @@ test("records pull request head metadata from the GitHub event", () => {
   assert.equal(result.source.repository, "fork/project");
   assert.equal(result.source.sha, sha);
   assert.equal(result.source.ref, "feature");
+  const baseline = JSON.parse(
+    fs.readFileSync(
+      path.join(recorded.outputDirectory, "baseline.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(baseline.source.repository, "owner/project");
+  assert.equal(baseline.source.sha, baselineSHA);
+  assert.equal(baseline.source.ref, "main");
 });
 
 test("action runtime definitions do not invoke Go", () => {

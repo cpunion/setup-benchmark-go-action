@@ -387,9 +387,26 @@ requests** views. A pull request run updates both its PR series and its branch
 series. History is capped at 500 commits per series.
 
 For a pull request, the publisher creates one bot comment and updates that same
-comment on later commits. Each metric is compared only with the newest matching
-platform in `main`. If no `main` baseline exists yet, including the first setup
-PR in a new project, the report succeeds and marks every metric as `new`.
+comment on later commits. When every platform artifact includes
+`baseline-benchmark-file`, each metric is compared with that paired baseline
+measured by the same runner job. The report links the baseline commit and labels
+the comparison `vs base`. Otherwise, each metric is compared with the newest
+matching platform in `main`. If neither baseline exists, including the first
+setup PR in a new project, the report succeeds and marks every metric as `new`.
+
+The recorder derives baseline repository, commit, and ref from the pull request
+base. They can be supplied explicitly for other events:
+
+```yaml
+- uses: xgo-dev/setup-benchmark-go-action@v1
+  with:
+    config: .github/go-benchmark.yml
+    benchmark-file: pr.txt
+    baseline-benchmark-file: main.txt
+```
+
+Run both files in one job on the same runner. A workflow should reuse dependency
+setup and avoid warming one measurement with caches from the other.
 
 The publisher also uploads a rendered preview artifact and writes the report to
 the job summary. Pull requests from forks use the same history and comment
@@ -432,14 +449,18 @@ rendering errors still fail the workflow.
 
 ## Recorder Reference
 
-| Input            | Required | Default                    | Meaning                                  |
-| ---------------- | -------- | -------------------------- | ---------------------------------------- |
-| `config`         | no       | `.github/go-benchmark.yml` | Grouping configuration path.             |
-| `benchmark-file` | yes      |                            | `go test -bench` output path.            |
-| `platform-id`    | no       | `<goos>-<goarch>`          | Stable comparison and merge identity.    |
-| `platform-label` | no       | derived                    | Human-readable platform name.            |
-| `shard-id`       | no       | `GITHUB_JOB`               | Stable shard identity within a platform. |
-| `retention-days` | no       | `30`                       | Uploaded artifact retention.             |
+| Input                     | Required | Default                    | Meaning                                            |
+| ------------------------- | -------- | -------------------------- | -------------------------------------------------- |
+| `config`                  | no       | `.github/go-benchmark.yml` | Grouping configuration path.                       |
+| `benchmark-file`          | yes      |                            | Current `go test -bench` output path.              |
+| `baseline-benchmark-file` | no       |                            | Same-runner baseline output used in the PR report. |
+| `baseline-repository`     | no       | PR base repository         | Explicit paired baseline repository.               |
+| `baseline-sha`            | no       | PR base commit             | Explicit paired baseline commit.                   |
+| `baseline-ref`            | no       | PR base ref                | Explicit paired baseline ref.                      |
+| `platform-id`             | no       | `<goos>-<goarch>`          | Stable comparison and merge identity.              |
+| `platform-label`          | no       | derived                    | Human-readable platform name.                      |
+| `shard-id`                | no       | `GITHUB_JOB`               | Stable shard identity within a platform.           |
+| `retention-days`          | no       | `30`                       | Uploaded artifact retention.                       |
 
 | Output          | Meaning                 |
 | --------------- | ----------------------- |

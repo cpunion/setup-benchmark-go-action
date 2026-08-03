@@ -27,15 +27,24 @@ test("record action adapter maps inputs to a validated artifact", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-action-"));
   const config = path.join(root, "benchmark.yml");
   const benchmark = path.join(root, "benchmark.txt");
+  const baseline = path.join(root, "baseline.txt");
   fs.writeFileSync(config, "id: action\n");
   fs.writeFileSync(
     benchmark,
     "goos: linux\ngoarch: amd64\nBenchmarkAction-8 10 1 ns/op\n",
   );
+  fs.writeFileSync(
+    baseline,
+    "goos: linux\ngoarch: amd64\nBenchmarkAction-8 10 2 ns/op\n",
+  );
   const recorded = withEnvironment(
     {
       BENCHMARK_CONFIG: config,
       BENCHMARK_BENCHMARK_FILE: benchmark,
+      BENCHMARK_BASELINE_BENCHMARK_FILE: baseline,
+      BENCHMARK_BASELINE_REPOSITORY: "owner/project",
+      BENCHMARK_BASELINE_SHA: "6666666666666666666666666666666666666666",
+      BENCHMARK_BASELINE_REF: "main",
       BENCHMARK_SHARD_ID: "unit",
       GITHUB_REPOSITORY: "owner/project",
       GITHUB_SHA: "7777777777777777777777777777777777777777",
@@ -51,6 +60,10 @@ test("record action adapter maps inputs to a validated artifact", () => {
   );
   assert.equal(
     fs.existsSync(path.join(recorded.outputDirectory, "result.json")),
+    true,
+  );
+  assert.equal(
+    fs.existsSync(path.join(recorded.outputDirectory, "baseline.json")),
     true,
   );
 });

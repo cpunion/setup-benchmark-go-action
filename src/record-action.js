@@ -25,6 +25,16 @@ function run() {
     "--input",
     workspacePath(input("benchmark-file")),
   ];
+  if (input("baseline-benchmark-file")) {
+    add(
+      args,
+      "baseline-input",
+      workspacePath(input("baseline-benchmark-file")),
+    );
+  }
+  add(args, "baseline-repository", input("baseline-repository"));
+  add(args, "baseline-sha", input("baseline-sha"));
+  add(args, "baseline-ref", input("baseline-ref"));
   add(args, "platform-id", input("platform-id"));
   add(args, "platform-label", input("platform-label"));
   add(args, "shard-id", input("shard-id"));

@@ -9,6 +9,18 @@ inputs:
   benchmark-file:
     description: Path to go test -bench output.
     required: true
+  baseline-benchmark-file:
+    description: Optional same-runner baseline output used for pull request comparisons.
+    default: ""
+  baseline-repository:
+    description: Baseline source repository. Defaults to the pull request base repository.
+    default: ""
+  baseline-sha:
+    description: Baseline source commit. Defaults to the pull request base commit.
+    default: ""
+  baseline-ref:
+    description: Baseline source ref. Defaults to the pull request base ref.
+    default: ""
   platform-id:
     description: Stable platform ID. Defaults to GOOS-GOARCH.
     default: ""
@@ -46,6 +58,10 @@ runs:
         BENCHMARK_ACTION_ENTRY: ${{ github.action_path }}/dist/index.js
         BENCHMARK_CONFIG: ${{ inputs.config }}
         BENCHMARK_BENCHMARK_FILE: ${{ inputs.benchmark-file }}
+        BENCHMARK_BASELINE_BENCHMARK_FILE: ${{ inputs.baseline-benchmark-file }}
+        BENCHMARK_BASELINE_REPOSITORY: ${{ inputs.baseline-repository }}
+        BENCHMARK_BASELINE_SHA: ${{ inputs.baseline-sha }}
+        BENCHMARK_BASELINE_REF: ${{ inputs.baseline-ref }}
         BENCHMARK_PLATFORM_ID: ${{ inputs.platform-id }}
         BENCHMARK_PLATFORM_LABEL: ${{ inputs.platform-label }}
         BENCHMARK_SHARD_ID: ${{ inputs.shard-id }}

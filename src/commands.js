@@ -13,7 +13,7 @@ const {
 const { loadConfig } = require("./config");
 const { parseGoBenchmark } = require("./gobench");
 const { writeReport } = require("./report");
-const { update } = require("./store");
+const { entryFromResults, update } = require("./store");
 const { assert, safePart, writeOutputs } = require("./util");
 
 function options(args, definitions) {
@@ -74,6 +74,15 @@ function sourceDefaults() {
   };
 }
 
+function baselineSourceDefaults() {
+  const base = githubEvent().pull_request?.base;
+  return {
+    repository: base?.repo?.full_name || "",
+    sha: base?.sha || "",
+    ref: base?.ref || "",
+  };
+}
+
 function serverURL() {
   return (process.env.GITHUB_SERVER_URL || "https://github.com").replace(
     /\/+$/u,
@@ -101,6 +110,10 @@ function runRecord(args, runtime = {}) {
   const values = options(args, {
     config: true,
     input: true,
+    "baseline-input": true,
+    "baseline-repository": true,
+    "baseline-sha": true,
+    "baseline-ref": true,
     "output-dir": true,
     "platform-id": true,
     "platform-label": true,
@@ -135,6 +148,15 @@ function runRecord(args, runtime = {}) {
   const repository = values.repository || defaults.repository;
   const sha = values.sha || defaults.sha;
   const sourceURL = values["source-url"] || defaultSourceURL(repository, sha);
+  const runURL = values["run-url"] || defaultRunURL();
+  const timestamp = values.timestamp || new Date().toISOString();
+  const platform = {
+    id: platformId,
+    label: values["platform-label"] || `${displayOS(targetOS)} / ${targetArch}`,
+    os: targetOS,
+    arch: targetArch,
+    ...(values.runner ? { runner: values.runner } : {}),
+  };
   const result = {
     schemaVersion,
     suiteId: config.id,
@@ -146,28 +168,51 @@ function runRecord(args, runtime = {}) {
         ? { ref: values.ref || defaults.ref }
         : {}),
       url: sourceURL,
-      ...(values["run-url"] || defaultRunURL()
-        ? { runUrl: values["run-url"] || defaultRunURL() }
-        : {}),
-      timestamp: values.timestamp || new Date().toISOString(),
+      ...(runURL ? { runUrl: runURL } : {}),
+      timestamp,
     },
-    platform: {
-      id: platformId,
-      label:
-        values["platform-label"] || `${displayOS(targetOS)} / ${targetArch}`,
-      os: targetOS,
-      arch: targetArch,
-      ...(values.runner ? { runner: values.runner } : {}),
-    },
+    platform,
     units: parsed.units,
     benchmarks: parsed.benchmarks,
   };
+  let baseline = null;
+  if (values["baseline-input"]) {
+    const baselineDefaults = baselineSourceDefaults();
+    const baselineRepository =
+      values["baseline-repository"] || baselineDefaults.repository;
+    const baselineSHA = values["baseline-sha"] || baselineDefaults.sha;
+    const baselineRef = values["baseline-ref"] || baselineDefaults.ref;
+    assert(
+      baselineRepository && baselineSHA,
+      "baseline repository and SHA are required with --baseline-input",
+    );
+    const baselineParsed = parseGoBenchmark(
+      fs.readFileSync(values["baseline-input"], "utf8"),
+      config,
+    );
+    baseline = {
+      schemaVersion,
+      suiteId: config.id,
+      shardId,
+      source: {
+        repository: baselineRepository,
+        sha: baselineSHA,
+        ...(baselineRef ? { ref: baselineRef } : {}),
+        url: defaultSourceURL(baselineRepository, baselineSHA),
+        ...(runURL ? { runUrl: runURL } : {}),
+        timestamp,
+      },
+      platform,
+      units: baselineParsed.units,
+      benchmarks: baselineParsed.benchmarks,
+    };
+  }
   const outputDirectory =
     values["output-dir"] ||
     defaultTemporaryDirectory(
       `go-benchmark-${config.id}-${platformId}-${shardId}-`,
     );
-  writeArtifact(outputDirectory, config, result);
+  writeArtifact(outputDirectory, config, result, baseline);
   const artifactName = `go-benchmark-${config.id}-${platformId}-${shardId}`;
   const outputs = {
     "artifact-name": artifactName,
@@ -235,6 +280,7 @@ function bindConfig(loaded, filename) {
     "artifact configuration does not match the trusted configuration",
   );
   for (const result of loaded.results) validateResult(result, trusted);
+  for (const baseline of loaded.baselines) validateResult(baseline, trusted);
   loaded.config = trusted;
 }
 
@@ -274,6 +320,10 @@ function runRender(args, runtime = {}) {
     primary,
     loaded.results,
   );
+  const pairedBaseline =
+    loaded.baselines.length === 0
+      ? null
+      : entryFromResults(loaded.baselines, loaded.config);
   const additionalValues = [
     values["additional-series-kind"],
     values["additional-series-id"],
@@ -296,7 +346,14 @@ function runRender(args, runtime = {}) {
   const siteURL = values["site-base-url"]
     ? `${values["site-base-url"].replace(/\/+$/u, "")}/${loaded.config.sitePath.replace(/^\/+|\/+$/gu, "")}/?series=${encodeURIComponent(`${primary.kind}/${primary.id}`)}`
     : "";
-  writeReport(commentPath, siteURL, loaded.config, updated.entry, updated.main);
+  writeReport(
+    commentPath,
+    siteURL,
+    loaded.config,
+    updated.entry,
+    pairedBaseline || updated.main,
+    { sameRunner: Boolean(pairedBaseline) },
+  );
   const outputs = {
     "comment-path": commentPath,
     marker: `<!-- go-benchmark:${loaded.config.id} -->`,

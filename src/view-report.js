@@ -143,7 +143,7 @@ function splitTitle(values, view) {
     .join(" / ");
 }
 
-function renderTable(items, view) {
+function renderTable(items, view, comparisonLabel) {
   const rows = uniqueTuples(items, view.rows, view);
   const columns = uniqueTuples(items, view.columns, view);
   assert(
@@ -163,7 +163,7 @@ function renderTable(items, view) {
   const header = view.rows.map((dimension) => dimensionTitle(view, dimension));
   for (const column of columns) {
     const labels = tupleLabels(column, view.columns, view);
-    header.push(labels.join(" / "), "vs main");
+    header.push(labels.join(" / "), comparisonLabel);
   }
   const lines = [
     `| ${header.map(tableCell).join(" | ")} |`,
@@ -194,7 +194,7 @@ function renderTable(items, view) {
   return lines;
 }
 
-function renderView(view, allItems) {
+function renderView(view, allItems, comparisonLabel) {
   const selected = allItems.filter((item) => view.matches(item));
   if (selected.length === 0) {
     assert(view.empty === "hide", `view ${view.id} has no matching results`);
@@ -214,7 +214,7 @@ function renderView(view, allItems) {
           );
     if (split.length > 0)
       body.push(`#### ${markdown(splitTitle(split, view))}`, "");
-    body.push(...renderTable(items, view), "");
+    body.push(...renderTable(items, view, comparisonLabel), "");
   }
 
   if (!view.collapsed) {
@@ -230,9 +230,11 @@ function renderView(view, allItems) {
   ];
 }
 
-function renderViews(config, current, baseline) {
+function renderViews(config, current, baseline, comparisonLabel = "vs main") {
   const items = observations(config, current, baseline);
-  return Object.values(config.views).flatMap((view) => renderView(view, items));
+  return Object.values(config.views).flatMap((view) =>
+    renderView(view, items, comparisonLabel),
+  );
 }
 
 module.exports = { renderViews };

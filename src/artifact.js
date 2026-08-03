@@ -216,11 +216,13 @@ function validateResult(result, config, options = {}) {
   return result;
 }
 
-function writeArtifact(directory, config, result) {
+function writeArtifact(directory, config, result, baseline = null) {
   validateResult(result, config);
+  if (baseline) validateResult(baseline, config);
   fs.mkdirSync(directory, { recursive: true });
   writeJSON(path.join(directory, "config.json"), config.toJSON());
   writeJSON(path.join(directory, "result.json"), result);
+  if (baseline) writeJSON(path.join(directory, "baseline.json"), baseline);
 }
 
 function canonicalConfig(config) {
@@ -253,15 +255,41 @@ function loadArtifacts(root) {
     resultPaths.length !== 0,
     `no result.json artifacts found under ${root}`,
   );
+  const baselines = [];
   const results = resultPaths.map((filename) => {
     const result = JSON.parse(fs.readFileSync(filename, "utf8"));
     try {
-      return validateResult(result, config);
+      validateResult(result, config);
+      const baselinePath = path.join(path.dirname(filename), "baseline.json");
+      if (fs.existsSync(baselinePath)) {
+        const baseline = validateResult(
+          JSON.parse(fs.readFileSync(baselinePath, "utf8")),
+          config,
+        );
+        assert(
+          baseline.shardId === result.shardId,
+          `baseline shard ${JSON.stringify(baseline.shardId)} does not match result shard ${JSON.stringify(result.shardId)}`,
+        );
+        assert(
+          JSON.stringify(baseline.platform) === JSON.stringify(result.platform),
+          `baseline platform does not match result platform ${JSON.stringify(result.platform.id)}`,
+        );
+        baselines.push(baseline);
+      }
+      return result;
     } catch (error) {
       throw new Error(`${filename}: ${error.message}`, { cause: error });
     }
   });
-  return { config, results: mergeShards(results) };
+  assert(
+    baselines.length === 0 || baselines.length === results.length,
+    "same-runner baseline must be present for every result artifact",
+  );
+  return {
+    config,
+    results: mergeShards(results),
+    baselines: baselines.length === 0 ? [] : mergeShards(baselines),
+  };
 }
 
 function mergeMetadata(target, incoming, platform) {
