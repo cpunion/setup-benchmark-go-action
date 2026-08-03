@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { validateResult } = require("./artifact");
+const { loadSnapshot } = require("./config");
 const { benchmarkKey } = require("./gobench");
 const {
   assert,
@@ -10,6 +11,7 @@ const {
   hasControl,
   readJSONIfExists,
   safePart,
+  walkFiles,
   writeJSON,
 } = require("./util");
 
@@ -52,6 +54,26 @@ function normalizeStoredResult(result, config) {
   return validateResult(result, config, { trustedLayout: false });
 }
 
+function validateEntry(entry, config) {
+  assert(
+    entry?.source && entry.platforms && typeof entry.platforms === "object",
+    "history entry is invalid",
+  );
+  for (const [id, result] of Object.entries(entry.platforms)) {
+    assert(
+      result?.platform?.id === id,
+      `history platform key ${JSON.stringify(id)} does not match its result`,
+    );
+    normalizeStoredResult(result, config);
+    assert(
+      result.source.repository === entry.source.repository &&
+        result.source.sha === entry.source.sha,
+      `history platform ${id} source does not match its entry`,
+    );
+  }
+  return entry;
+}
+
 function validateHistory(history, config, series) {
   assert(
     history.schemaVersion === schemaVersion,
@@ -69,24 +91,47 @@ function validateHistory(history, config, series) {
     "history entries are invalid",
   );
   for (const entry of history.entries) {
-    assert(
-      entry?.source && entry.platforms && typeof entry.platforms === "object",
-      "history entry is invalid",
-    );
-    for (const [id, result] of Object.entries(entry.platforms)) {
-      assert(
-        result?.platform?.id === id,
-        `history platform key ${JSON.stringify(id)} does not match its result`,
-      );
-      normalizeStoredResult(result, config);
-      assert(
-        result.source.repository === entry.source.repository &&
-          result.source.sha === entry.source.sha,
-        `history platform ${id} source does not match its entry`,
-      );
-    }
+    validateEntry(entry, config);
   }
   history.label = series.label;
+}
+
+function emptyHistory(config, series) {
+  return {
+    schemaVersion,
+    suiteId: config.id,
+    kind: series.kind,
+    id: series.id,
+    label: series.label,
+    entries: [],
+  };
+}
+
+function mergeHistories(paths, config, series, nullable = false) {
+  const histories = paths
+    .map((filename) => readJSONIfExists(filename, null))
+    .filter(Boolean);
+  if (histories.length === 0)
+    return nullable ? null : emptyHistory(config, series);
+  const merged = emptyHistory(config, series);
+  for (const history of histories) {
+    validateHistory(history, config, series);
+    for (const entry of history.entries) {
+      const previous = merged.entries.findIndex((item) =>
+        sameSource(item, entry),
+      );
+      if (previous === -1) {
+        merged.entries.push(entry);
+      } else if (compareEntries(merged.entries[previous], entry) <= 0) {
+        merged.entries[previous] = entry;
+      }
+    }
+  }
+  merged.entries.sort(compareEntries);
+  if (merged.entries.length > maxHistoryEntries) {
+    merged.entries.splice(0, merged.entries.length - maxHistoryEntries);
+  }
+  return merged;
 }
 
 function entryFromResults(results, config) {
@@ -124,6 +169,55 @@ function compareSeries(left, right) {
   );
 }
 
+function sameSource(left, right) {
+  return (
+    left.source.repository === right.source.repository &&
+    left.source.sha === right.source.sha
+  );
+}
+
+function commitRelative(entry) {
+  assert(
+    /^[0-9a-f]{40}$/u.test(entry.source.sha),
+    `invalid source SHA ${JSON.stringify(entry.source.sha)}`,
+  );
+  return path.posix.join("commits", `${entry.source.sha}.json`);
+}
+
+function writeCommit(siteRoot, config, entry, comparison = null) {
+  validateEntry(entry, config);
+  if (comparison) validateEntry(comparison, config);
+  const relative = commitRelative(entry);
+  const filename = path.join(siteRoot, ...relative.split("/"));
+  const previous = readJSONIfExists(filename, null);
+  let snapshot = entry;
+  if (previous) {
+    assert(
+      previous.schemaVersion === schemaVersion &&
+        previous.suiteId === config.id,
+      `commit snapshot identity does not match ${config.id}`,
+    );
+    validateEntry(previous, config);
+    assert(
+      previous.source.sha === entry.source.sha,
+      `commit snapshot source does not match ${entry.source.sha}`,
+    );
+    if (compareEntries(previous, entry) > 0) snapshot = previous;
+    if (previous.comparison) {
+      validateEntry(previous.comparison, config);
+      comparison ??= previous.comparison;
+    }
+  }
+  writeJSON(filename, {
+    schemaVersion,
+    suiteId: config.id,
+    source: snapshot.source,
+    platforms: snapshot.platforms,
+    ...(comparison ? { comparison } : {}),
+  });
+  return relative;
+}
+
 function latestMatchingPlatforms(history, current) {
   if (!history?.entries?.length) return null;
   const platforms = {};
@@ -159,10 +253,119 @@ function writeWeb(dataRoot, siteRoot) {
   fs.writeFileSync(path.join(dataRoot, ".nojekyll"), "");
 }
 
-function update(dataRoot, config, series, results) {
+function migrateLegacyData(dataRoot, sitePath) {
+  const normalized = path.posix.normalize(sitePath);
+  assert(
+    normalized !== "." &&
+      !normalized.startsWith("../") &&
+      !path.posix.isAbsolute(normalized),
+    `site path ${JSON.stringify(sitePath)} must stay within the data branch`,
+  );
+  const siteRoot = path.join(dataRoot, ...normalized.split("/"));
+  const seriesRoot = path.join(siteRoot, "series");
+  const legacyPaths = walkFiles(seriesRoot, "history.json");
+  const indexPath = path.join(siteRoot, "series.json");
+  const index = readJSONIfExists(indexPath, {
+    schemaVersion,
+    series: [],
+  });
+  assert(
+    index.schemaVersion === schemaVersion && Array.isArray(index.series),
+    "unsupported or invalid series index",
+  );
+  const commits = new Set();
+  for (const legacyPath of legacyPaths) {
+    const directory = path.dirname(legacyPath);
+    const config = loadSnapshot(path.join(directory, "config.json"));
+    assert(
+      config.sitePath === normalized,
+      `series config site path ${JSON.stringify(config.sitePath)} does not match ${JSON.stringify(normalized)}`,
+    );
+    const legacy = readJSONIfExists(legacyPath, null);
+    const series = {
+      kind: legacy?.kind,
+      id: legacy?.id,
+      label: legacy?.label,
+    };
+    validateSeries(series);
+    validateHistory(legacy, config, series);
+    const summaryPath = path.join(directory, "summary.json");
+    const hadSummary = fs.existsSync(summaryPath);
+    const history = mergeHistories([summaryPath, legacyPath], config, series);
+    for (const entry of history.entries) {
+      commits.add(commitRelative(entry));
+      writeCommit(siteRoot, config, entry);
+    }
+    if (series.kind === "pull" && history.entries.length > 0) {
+      const latest = history.entries[history.entries.length - 1];
+      if (hadSummary) {
+        const existing = readJSONIfExists(summaryPath, null);
+        validateHistory(existing, config, series);
+        const current = existing.entries[existing.entries.length - 1];
+        if (!current || compareEntries(current, latest) < 0) {
+          history.entries = [latest];
+        } else {
+          history.entries = existing.entries;
+        }
+      } else {
+        history.entries = [latest];
+      }
+    }
+    writeJSON(summaryPath, history);
+    const latest = history.entries[history.entries.length - 1];
+    let item = index.series.find(
+      (candidate) =>
+        candidate.kind === series.kind && candidate.id === series.id,
+    );
+    if (!item && latest) {
+      item = {
+        kind: series.kind,
+        id: series.id,
+        label: series.label,
+        configPath: path.posix.join(
+          "series",
+          series.kind,
+          series.id,
+          "config.json",
+        ),
+        updatedAt: latest.source.timestamp,
+      };
+      index.series.push(item);
+    }
+    if (latest) {
+      item.path = path.posix.join(
+        "series",
+        series.kind,
+        series.id,
+        "summary.json",
+      );
+      item.configPath = path.posix.join(
+        "series",
+        series.kind,
+        series.id,
+        "config.json",
+      );
+      item.commitPath = commitRelative(latest);
+      item.sha = latest.source.sha;
+      item.sourceUrl = latest.source.url;
+    }
+  }
+  index.series.sort(compareSeries);
+  writeJSON(indexPath, index);
+  writeWeb(dataRoot, siteRoot);
+  return { commits: commits.size, series: legacyPaths.length, siteRoot };
+}
+
+function update(dataRoot, config, series, results, options = {}) {
   validateSeries(series);
   const entry = entryFromResults(results, config);
   const relative = path.posix.join(
+    "series",
+    series.kind,
+    series.id,
+    "summary.json",
+  );
+  const legacyRelative = path.posix.join(
     "series",
     series.kind,
     series.id,
@@ -175,27 +378,44 @@ function update(dataRoot, config, series, results) {
     "config.json",
   );
   const siteRoot = path.join(dataRoot, ...config.sitePath.split("/"));
-  const historyPath = path.join(siteRoot, ...relative.split("/"));
+  const summaryPath = path.join(siteRoot, ...relative.split("/"));
+  const legacyPath = path.join(siteRoot, ...legacyRelative.split("/"));
   const configPath = path.join(siteRoot, ...configRelative.split("/"));
-  const history = readJSONIfExists(historyPath, {
-    schemaVersion,
-    suiteId: config.id,
-    kind: series.kind,
-    id: series.id,
-    label: series.label,
-    entries: [],
-  });
-  validateHistory(history, config, series);
-  const previous = history.entries.findIndex(
-    (item) => item.source.sha === entry.source.sha,
-  );
-  if (previous === -1) history.entries.push(entry);
-  else history.entries[previous] = entry;
-  history.entries.sort(compareEntries);
-  if (history.entries.length > maxHistoryEntries) {
-    history.entries.splice(0, history.entries.length - maxHistoryEntries);
+  const history = mergeHistories([summaryPath, legacyPath], config, series);
+  const comparison = options.comparison ?? null;
+  if (comparison) validateEntry(comparison, config);
+  if (series.kind === "pull") {
+    for (const item of history.entries) writeCommit(siteRoot, config, item);
+    history.entries =
+      comparison && !sameSource(comparison, entry)
+        ? [comparison, entry]
+        : [entry];
+  } else {
+    const previous = history.entries.findIndex((item) =>
+      sameSource(item, entry),
+    );
+    if (previous === -1) history.entries.push(entry);
+    else history.entries[previous] = entry;
+    history.entries.sort(compareEntries);
+    if (history.entries.length > maxHistoryEntries) {
+      history.entries.splice(0, history.entries.length - maxHistoryEntries);
+    }
   }
-  writeJSON(historyPath, history);
+  if (series.kind === "pull") {
+    writeCommit(siteRoot, config, entry, comparison);
+  } else {
+    for (const item of history.entries) {
+      writeCommit(
+        siteRoot,
+        config,
+        item,
+        sameSource(item, entry) ? comparison : null,
+      );
+    }
+  }
+  const commitPath = commitRelative(entry);
+  writeJSON(summaryPath, history);
+  writeJSON(legacyPath, history);
   writeJSON(configPath, config.toJSON());
 
   const indexPath = path.join(siteRoot, "series.json");
@@ -213,6 +433,7 @@ function update(dataRoot, config, series, results) {
     label: series.label,
     path: relative,
     configPath: configRelative,
+    commitPath,
     sha: entry.source.sha,
     sourceUrl: entry.source.url,
     updatedAt: new Date().toISOString(),
@@ -231,9 +452,21 @@ function update(dataRoot, config, series, results) {
     "series",
     "main",
     "main",
+    "summary.json",
+  );
+  const legacyMainPath = path.join(
+    siteRoot,
+    "series",
+    "main",
+    "main",
     "history.json",
   );
-  const mainHistory = readJSONIfExists(mainPath, null);
+  const mainHistory = mergeHistories(
+    [mainPath, legacyMainPath],
+    config,
+    { kind: "main", id: "main", label: "Main" },
+    true,
+  );
   if (mainHistory) {
     validateHistory(mainHistory, config, {
       kind: "main",
@@ -244,9 +477,16 @@ function update(dataRoot, config, series, results) {
   return {
     entry,
     main: latestMatchingPlatforms(mainHistory, entry.platforms),
-    historyPath,
+    commitPath: path.join(siteRoot, ...commitPath.split("/")),
+    historyPath: summaryPath,
+    summaryPath,
     sitePath: siteRoot,
   };
 }
 
-module.exports = { entryFromResults, latestMatchingPlatforms, update };
+module.exports = {
+  entryFromResults,
+  latestMatchingPlatforms,
+  migrateLegacyData,
+  update,
+};

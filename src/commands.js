@@ -355,16 +355,17 @@ function runRender(args, runtime = {}) {
   bindSource(loaded.results, loaded.config, values);
   bindBaselineSource(loaded.baselines, loaded.config, values);
   const primary = series(values);
+  const pairedBaseline =
+    loaded.baselines.length === 0
+      ? null
+      : entryFromResults(loaded.baselines, loaded.config);
   const updated = update(
     values["data-dir"],
     loaded.config,
     primary,
     loaded.results,
+    { comparison: primary.kind === "pull" ? pairedBaseline : null },
   );
-  const pairedBaseline =
-    loaded.baselines.length === 0
-      ? null
-      : entryFromResults(loaded.baselines, loaded.config);
   const additionalValues = [
     values["additional-series-kind"],
     values["additional-series-id"],
@@ -380,6 +381,7 @@ function runRender(args, runtime = {}) {
       loaded.config,
       series(values, "additional-"),
       loaded.results,
+      { comparison: pairedBaseline },
     );
   }
   const commentPath =

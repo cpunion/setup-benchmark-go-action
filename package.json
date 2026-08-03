@@ -10,7 +10,9 @@
     "check": "npm run format:check && npm run lint && npm test",
     "format": "prettier --write \"{scripts,src,test,web}/**/*.{js,html,css}\" \"*.{json,yml,md}\" \"{.github,publish}/**/*.{yml,yaml}\"",
     "format:check": "prettier --check \"{scripts,src,test,web}/**/*.{js,html,css}\" \"*.{json,yml,md}\" \"{.github,publish}/**/*.{yml,yaml}\"",
+    "import-legacy-data": "node scripts/import-github-action-benchmark.js",
     "lint": "eslint scripts src test",
+    "migrate-data": "node scripts/migrate-data.js",
     "test": "node --test --test-reporter=spec"
   },
   "engines": {
