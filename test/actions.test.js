@@ -146,7 +146,7 @@ test("render action adapter writes history and publisher outputs", () => {
         "series",
         "main",
         "main",
-        "history.json",
+        "summary.json",
       ),
       "utf8",
     ),

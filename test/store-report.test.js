@@ -7,7 +7,7 @@ const path = require("node:path");
 const test = require("node:test");
 const { Config } = require("../src/config");
 const { writeReport } = require("../src/report");
-const { update } = require("../src/store");
+const { migrateLegacyData, update } = require("../src/store");
 
 function result(sha, value) {
   return {
@@ -40,7 +40,7 @@ function result(sha, value) {
   };
 }
 
-test("stores main and pull histories, writes web assets, and reports a baseline", () => {
+test("stores commit snapshots and series summaries and reports a baseline", () => {
   const config = new Config({
     id: "history",
     title: "History",
@@ -85,13 +85,177 @@ test("stores main and pull histories, writes web assets, and reports a baseline"
     index.series.map((item) => `${item.kind}/${item.id}`),
     ["main/main", "pull/7"],
   );
+  assert.equal(index.series[0].path, "series/main/main/summary.json");
+  assert.equal(index.series[0].commitPath, `commits/${mainSHA}.json`);
   assert.match(index.series[0].updatedAt, /^\d{4}-\d{2}-\d{2}T.*Z$/u);
+  const mainCommit = JSON.parse(
+    fs.readFileSync(
+      path.join(root, "go-benchmarks", "history", "commits", `${mainSHA}.json`),
+      "utf8",
+    ),
+  );
+  assert.equal(mainCommit.source.sha, mainSHA);
+  assert.equal(mainCommit.platforms["linux-amd64"].benchmarks.length, 1);
   assert.match(
     fs.readFileSync(
       path.join(root, "go-benchmarks", "history", "index.html"),
       "utf8",
     ),
     /<time id="updated-at"><\/time>/u,
+  );
+});
+
+test("keeps branch history but limits a pull summary to base and head", () => {
+  const config = new Config({
+    id: "history",
+    groups: { core: "^Core" },
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-series-"));
+  const baseSHA = "1010101010101010101010101010101010101010";
+  const oldHeadSHA = "2020202020202020202020202020202020202020";
+  const headSHA = "3030303030303030303030303030303030303030";
+  const nextHeadSHA = "3535353535353535353535353535353535353535";
+  const branch = { kind: "branch", id: "feature", label: "Branch feature" };
+  update(root, config, branch, [result(oldHeadSHA, 9)]);
+  update(root, config, branch, [result(headSHA, 8)]);
+  const base = {
+    source: result(baseSHA, 10).source,
+    platforms: { "linux-amd64": result(baseSHA, 10) },
+  };
+  update(
+    root,
+    config,
+    { kind: "pull", id: "7", label: "PR #7" },
+    [result(oldHeadSHA, 9)],
+    { comparison: base },
+  );
+  const pull = update(
+    root,
+    config,
+    { kind: "pull", id: "7", label: "PR #7" },
+    [result(headSHA, 8)],
+    { comparison: base },
+  );
+  update(root, config, branch, [result(nextHeadSHA, 7)]);
+
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(pull.summaryPath, "utf8")).entries.map(
+      (entry) => entry.source.sha,
+    ),
+    [baseSHA, headSHA],
+  );
+  const headCommit = JSON.parse(
+    fs.readFileSync(
+      path.join(root, "go-benchmarks", "history", "commits", `${headSHA}.json`),
+      "utf8",
+    ),
+  );
+  assert.equal(headCommit.comparison.source.sha, baseSHA);
+  const branchSummary = JSON.parse(
+    fs.readFileSync(
+      path.join(
+        root,
+        "go-benchmarks",
+        "history",
+        "series",
+        "branch",
+        "feature",
+        "summary.json",
+      ),
+      "utf8",
+    ),
+  );
+  assert.deepEqual(
+    branchSummary.entries.map((entry) => entry.source.sha),
+    [oldHeadSHA, headSHA, nextHeadSHA],
+  );
+});
+
+test("migrates and synchronizes legacy history with commit snapshots", () => {
+  const config = new Config({
+    id: "history",
+    groups: { core: "^Core" },
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-migrate-"));
+  const firstSHA = "4040404040404040404040404040404040404040";
+  const secondSHA = "5050505050505050505050505050505050505050";
+  const series = { kind: "main", id: "main", label: "Main" };
+  const first = update(root, config, series, [result(firstSHA, 10)]);
+  const legacyPath = path.join(path.dirname(first.summaryPath), "history.json");
+  const legacy = JSON.parse(fs.readFileSync(legacyPath, "utf8"));
+  const second = result(secondSHA, 9);
+  legacy.entries.push({
+    source: second.source,
+    platforms: { "linux-amd64": second },
+  });
+  fs.writeFileSync(legacyPath, `${JSON.stringify(legacy, null, 2)}\n`);
+  fs.rmSync(first.summaryPath);
+  fs.rmSync(path.join(root, "go-benchmarks", "history", "commits"), {
+    recursive: true,
+  });
+
+  const migrated = migrateLegacyData(root, "go-benchmarks/history");
+  const summaryPath = path.join(path.dirname(legacyPath), "summary.json");
+  assert.equal(migrated.series, 1);
+  assert.equal(migrated.commits, 2);
+  const summarySHAs = JSON.parse(
+    fs.readFileSync(summaryPath, "utf8"),
+  ).entries.map((entry) => entry.source.sha);
+  assert.deepEqual(summarySHAs, [firstSHA, secondSHA]);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(legacyPath, "utf8")).entries.map(
+      (entry) => entry.source.sha,
+    ),
+    summarySHAs,
+  );
+  for (const sha of [firstSHA, secondSHA]) {
+    assert.equal(
+      fs.existsSync(
+        path.join(root, "go-benchmarks", "history", "commits", `${sha}.json`),
+      ),
+      true,
+    );
+  }
+});
+
+test("merges a late write from an older publisher bundle", () => {
+  const config = new Config({
+    id: "history",
+    groups: { core: "^Core" },
+  });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-late-legacy-"));
+  const firstSHA = "6161616161616161616161616161616161616161";
+  const legacySHA = "6262626262626262626262626262626262626262";
+  const currentSHA = "6363636363636363636363636363636363636363";
+  const series = { kind: "branch", id: "feature", label: "Branch feature" };
+  const first = update(root, config, series, [result(firstSHA, 10)]);
+  const legacyPath = path.join(path.dirname(first.summaryPath), "history.json");
+  const legacy = JSON.parse(fs.readFileSync(legacyPath, "utf8"));
+  const late = result(legacySHA, 9);
+  legacy.entries.push({
+    source: late.source,
+    platforms: { "linux-amd64": late },
+  });
+  fs.writeFileSync(legacyPath, `${JSON.stringify(legacy, null, 2)}\n`);
+
+  const updated = update(root, config, series, [result(currentSHA, 8)]);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(updated.summaryPath, "utf8")).entries.map(
+      (entry) => entry.source.sha,
+    ),
+    [firstSHA, legacySHA, currentSHA],
+  );
+  assert.equal(
+    fs.existsSync(
+      path.join(
+        root,
+        "go-benchmarks",
+        "history",
+        "commits",
+        `${legacySHA}.json`,
+      ),
+    ),
+    true,
   );
 });
 
@@ -143,7 +307,7 @@ test("keeps valid history when grouping and chart configuration evolves", () => 
     [third],
   );
   assert.equal(
-    JSON.parse(fs.readFileSync(updated.historyPath, "utf8")).entries.length,
+    JSON.parse(fs.readFileSync(updated.summaryPath, "utf8")).entries.length,
     3,
   );
 });

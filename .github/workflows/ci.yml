@@ -60,5 +60,5 @@ jobs:
         run: |
           test -s "$COMMENT_PATH"
           test -s "$SITE_PATH/index.html"
-          test -s "$SITE_PATH/series/pull/1/history.json"
-          test -s "$SITE_PATH/series/branch/feature/history.json"
+          test -s "$SITE_PATH/series/pull/1/summary.json"
+          test -s "$SITE_PATH/series/branch/feature/summary.json"

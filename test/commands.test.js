@@ -122,12 +122,12 @@ test("records and renders without invoking a Go toolchain", () => {
         "series",
         "branch",
         "feature",
-        "history.json",
+        "summary.json",
       ),
     ),
     true,
   );
-  const history = JSON.parse(
+  const summary = JSON.parse(
     fs.readFileSync(
       path.join(
         data,
@@ -136,12 +136,16 @@ test("records and renders without invoking a Go toolchain", () => {
         "series",
         "pull",
         "9",
-        "history.json",
+        "summary.json",
       ),
       "utf8",
     ),
   );
-  assert.deepEqual(history.entries[0].source, {
+  assert.deepEqual(
+    summary.entries.map((entry) => entry.source.sha),
+    [baselineSHA, sha],
+  );
+  assert.deepEqual(summary.entries[1].source, {
     repository: "owner/project",
     sha,
     ref: "feature",
@@ -149,6 +153,14 @@ test("records and renders without invoking a Go toolchain", () => {
     runUrl: "https://github.com/owner/project/actions/runs/123",
     timestamp: "2026-07-28T12:00:00.000Z",
   });
+  const commit = JSON.parse(
+    fs.readFileSync(
+      path.join(data, "go-benchmarks", "command", "commits", `${sha}.json`),
+      "utf8",
+    ),
+  );
+  assert.equal(commit.source.sha, sha);
+  assert.equal(commit.comparison.source.sha, baselineSHA);
 
   assert.throws(
     () =>

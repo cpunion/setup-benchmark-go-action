@@ -14,12 +14,13 @@ The publisher creates one bot comment and updates it for later commits:
 
 ![Benchmark pull request comment](docs/images/pr-comment.png)
 
-GitHub Pages keeps long-term Main, Branches, and Pull requests series. A merged
-commit extends the Main series:
+GitHub Pages keeps long-term Main and Branch trends. A merged commit extends the
+Main series:
 
 ![Main benchmark history](docs/images/pages-main.png)
 
-Pull request history remains available independently for investigation:
+Pull request pages show the measured base and current head from the same runner
+job, while the head branch keeps the long-term history:
 
 ![Pull request benchmark history](docs/images/pages-pull-request.png)
 
@@ -383,8 +384,18 @@ Only equal platform IDs are merged or compared.
 ## Published Results
 
 The generated Pages site keeps separate **Main**, **Branches**, and **Pull
-requests** views. A pull request run updates both its PR series and its branch
-series. History is capped at 500 commits per series.
+requests** views. Each measured commit is stored directly at
+`commits/<sha>.json`, so its complete platform results can be found without
+recovering an older version of a shared history file. Pull request commit files
+also include the paired same-runner base observation used for their comparison.
+
+Main and branch series write a combined `summary.json` containing up to 500
+measured commits in chronological order. A pull request run updates both its
+branch summary and a compact PR summary containing only the paired base (when
+available) and the current head. Existing `history.json` data is merged into the
+new layout automatically. A synchronized compatibility copy is kept during the
+transition so workflow runs that started with an older action bundle can still
+publish without losing history.
 
 For a pull request, the publisher creates one bot comment and updates that same
 comment on later commits. When every platform artifact includes
