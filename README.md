@@ -395,7 +395,9 @@ matching platform in `main`. If neither baseline exists, including the first
 setup PR in a new project, the report succeeds and marks every metric as `new`.
 
 The recorder derives baseline repository, commit, and ref from the pull request
-base. They can be supplied explicitly for other events:
+base. The trusted publisher requires the baseline repository to match the pull
+request target and rebuilds its commit link on the trusted GitHub host. The
+metadata can be supplied explicitly for other events:
 
 ```yaml
 - uses: xgo-dev/setup-benchmark-go-action@v1
@@ -505,10 +507,10 @@ code. Before merging shards or writing history, the publisher validates schema
 versions, URLs, labels, metric values, sample medians, configuration, layouts,
 units, platforms, and size limits. For fork pull requests, the artifact
 configuration must exactly match the configured file on the default branch. It
-then binds the current and paired-baseline repository, commit, ref, URLs, and
-timestamp to trusted `workflow_run` and pull request API metadata. This lets
-fork pull requests publish without trusting identity or storage layout supplied
-by their workflow.
+then binds current-result identity to trusted `workflow_run` metadata, restricts
+paired baselines to the pull request target repository, and rebuilds trusted
+source URLs. This lets fork pull requests publish without trusting external
+links or storage layout supplied by their workflow.
 
 The trusted publisher serializes writes per data repository and publishes one
 commit after all platform artifacts have passed validation.

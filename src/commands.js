@@ -277,26 +277,29 @@ function bindBaselineSource(results, config, values) {
   const expectedRepository = values["expected-baseline-repository"];
   const expectedSHA = values["expected-baseline-sha"];
   assert(
-    expectedRepository && expectedSHA,
-    "expected baseline repository and SHA are required with a paired baseline",
+    expectedRepository,
+    "expected baseline repository is required with a paired baseline",
   );
   for (const result of results) {
     assert(
       result.source.repository === expectedRepository,
       `artifact baseline repository ${JSON.stringify(result.source.repository)} does not match ${JSON.stringify(expectedRepository)}`,
     );
-    assert(
-      result.source.sha === expectedSHA,
-      `artifact baseline SHA ${JSON.stringify(result.source.sha)} does not match ${JSON.stringify(expectedSHA)}`,
-    );
+    if (expectedSHA) {
+      assert(
+        result.source.sha === expectedSHA,
+        `artifact baseline SHA ${JSON.stringify(result.source.sha)} does not match ${JSON.stringify(expectedSHA)}`,
+      );
+    }
+    const baselineSHA = expectedSHA || result.source.sha;
     result.source = {
       ...result.source,
       repository: expectedRepository,
-      sha: expectedSHA,
+      sha: baselineSHA,
       ...(values["baseline-source-ref"]
         ? { ref: values["baseline-source-ref"] }
         : {}),
-      url: defaultSourceURL(expectedRepository, expectedSHA),
+      url: defaultSourceURL(expectedRepository, baselineSHA),
       ...(values["source-run-url"] ? { runUrl: values["source-run-url"] } : {}),
       ...(values["source-timestamp"]
         ? { timestamp: values["source-timestamp"] }

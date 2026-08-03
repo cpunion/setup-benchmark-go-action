@@ -81,9 +81,6 @@ jobs:
 
           same_repository=false
           [[ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]] || same_repository=true
-          base_repository=""
-          base_sha=""
-          base_ref=""
           if [[ "$RUN_EVENT" == pull_request ]]; then
             if [[ -z "$PR_NUMBER" ]]; then
               head_owner="${HEAD_REPOSITORY%%/*}"
@@ -100,19 +97,6 @@ jobs:
             fi
             if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
               echo "cannot resolve pull request for $HEAD_SHA" >&2
-              exit 1
-            fi
-            base_record="$(
-              gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
-                --jq '[.base.repo.full_name, .base.sha, .base.ref] | @tsv'
-            )"
-            IFS=$'\t' read -r base_repository base_sha base_ref <<< "$base_record"
-            if [[ ! "$base_repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-              echo "invalid pull request base repository: ${base_repository:-missing}" >&2
-              exit 1
-            fi
-            if [[ ! "$base_sha" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "invalid pull request base commit: ${base_sha:-missing}" >&2
               exit 1
             fi
             kind=pull
@@ -144,9 +128,6 @@ jobs:
             echo "id=$id"
             echo "label=$label"
             echo "pr=$PR_NUMBER"
-            echo "base-repository=$base_repository"
-            echo "base-sha=$base_sha"
-            echo "base-ref=$base_ref"
             if [[ "$kind" == pull ]]; then
               echo "additional-kind=branch"
               echo "additional-id=$branch_id"
@@ -285,9 +266,8 @@ jobs:
           site-base-url: ${{ steps.pages.outputs.url }}
           expected-source-repository: ${{ github.event.workflow_run.head_repository.full_name }}
           expected-source-sha: ${{ github.event.workflow_run.head_sha }}
-          expected-baseline-repository: ${{ steps.source.outputs.base-repository }}
-          expected-baseline-sha: ${{ steps.source.outputs.base-sha }}
-          baseline-source-ref: ${{ steps.source.outputs.base-ref }}
+          expected-baseline-repository: >-
+            ${{ steps.source.outputs.kind == 'pull' && github.repository || '' }}
           source-ref: ${{ github.event.workflow_run.head_branch }}
           source-url: >-
             ${{ format(

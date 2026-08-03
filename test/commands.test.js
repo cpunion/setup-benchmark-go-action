@@ -92,10 +92,6 @@ test("records and renders without invoking a Go toolchain", () => {
     sha,
     "--expected-baseline-repository",
     "owner/project",
-    "--expected-baseline-sha",
-    baselineSHA,
-    "--baseline-source-ref",
-    "main",
     "--source-ref",
     "feature",
     "--source-url",
@@ -172,7 +168,31 @@ test("records and renders without invoking a Go toolchain", () => {
         "--expected-source-sha",
         sha,
       ]),
-    /expected baseline repository and SHA are required/u,
+    /expected baseline repository is required/u,
+  );
+  assert.throws(
+    () =>
+      runRender([
+        "--artifacts",
+        artifact,
+        "--data-dir",
+        path.join(root, "rejected-baseline-sha"),
+        "--series-kind",
+        "pull",
+        "--series-id",
+        "9",
+        "--series-label",
+        "PR #9",
+        "--expected-source-repository",
+        "owner/project",
+        "--expected-source-sha",
+        sha,
+        "--expected-baseline-repository",
+        "owner/project",
+        "--expected-baseline-sha",
+        "0000000000000000000000000000000000000000",
+      ]),
+    /artifact baseline SHA .* does not match/u,
   );
   assert.throws(
     () =>

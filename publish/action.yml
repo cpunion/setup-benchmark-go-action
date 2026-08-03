@@ -42,7 +42,7 @@ inputs:
     description: Repository identity required in every paired baseline artifact.
     default: ""
   expected-baseline-sha:
-    description: Commit identity required in every paired baseline artifact.
+    description: Optional exact commit identity required in every paired baseline artifact.
     default: ""
   baseline-source-ref:
     description: Trusted paired baseline ref shown in the report.
