@@ -272,6 +272,40 @@ function bindSource(results, config, values) {
   }
 }
 
+function bindBaselineSource(results, config, values) {
+  if (results.length === 0) return;
+  const expectedRepository = values["expected-baseline-repository"];
+  const expectedSHA = values["expected-baseline-sha"];
+  assert(
+    expectedRepository && expectedSHA,
+    "expected baseline repository and SHA are required with a paired baseline",
+  );
+  for (const result of results) {
+    assert(
+      result.source.repository === expectedRepository,
+      `artifact baseline repository ${JSON.stringify(result.source.repository)} does not match ${JSON.stringify(expectedRepository)}`,
+    );
+    assert(
+      result.source.sha === expectedSHA,
+      `artifact baseline SHA ${JSON.stringify(result.source.sha)} does not match ${JSON.stringify(expectedSHA)}`,
+    );
+    result.source = {
+      ...result.source,
+      repository: expectedRepository,
+      sha: expectedSHA,
+      ...(values["baseline-source-ref"]
+        ? { ref: values["baseline-source-ref"] }
+        : {}),
+      url: defaultSourceURL(expectedRepository, expectedSHA),
+      ...(values["source-run-url"] ? { runUrl: values["source-run-url"] } : {}),
+      ...(values["source-timestamp"]
+        ? { timestamp: values["source-timestamp"] }
+        : {}),
+    };
+    validateResult(result, config);
+  }
+}
+
 function bindConfig(loaded, filename) {
   if (!filename) return;
   const trusted = loadConfig(filename);
@@ -298,6 +332,9 @@ function runRender(args, runtime = {}) {
     "site-base-url": true,
     "expected-source-repository": true,
     "expected-source-sha": true,
+    "expected-baseline-repository": true,
+    "expected-baseline-sha": true,
+    "baseline-source-ref": true,
     "source-ref": true,
     "source-url": true,
     "source-run-url": true,
@@ -313,6 +350,7 @@ function runRender(args, runtime = {}) {
   const loaded = loadArtifacts(values.artifacts);
   bindConfig(loaded, values["trusted-config"]);
   bindSource(loaded.results, loaded.config, values);
+  bindBaselineSource(loaded.baselines, loaded.config, values);
   const primary = series(values);
   const updated = update(
     values["data-dir"],

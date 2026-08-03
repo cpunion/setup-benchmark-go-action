@@ -56,3 +56,23 @@ test("benchmark validation and rendering remain hard failures", () => {
     assert.notEqual(step(name)["continue-on-error"], true, name);
   }
 });
+
+test("publisher pins paired baselines to trusted pull request metadata", () => {
+  const classify = step("Classify source series").run;
+  assert.match(
+    classify,
+    /gh api "repos\/\$\{GITHUB_REPOSITORY\}\/pulls\/\$\{PR_NUMBER\}"/u,
+  );
+  assert.match(classify, /\.base\.repo\.full_name/u);
+  assert.match(classify, /\.base\.sha/u);
+  const render = step("Render benchmark history");
+  assert.equal(render.uses, "xgo-dev/setup-benchmark-go-action/publish@v1");
+  assert.match(
+    render.with["expected-baseline-repository"],
+    /steps\.source\.outputs\.base-repository/u,
+  );
+  assert.match(
+    render.with["expected-baseline-sha"],
+    /steps\.source\.outputs\.base-sha/u,
+  );
+});

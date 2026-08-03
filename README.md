@@ -406,7 +406,8 @@ base. They can be supplied explicitly for other events:
 ```
 
 Run both files in one job on the same runner. A workflow should reuse dependency
-setup and avoid warming one measurement with caches from the other.
+setup and may reuse build caches for unchanged packages to keep the paired run
+short.
 
 The publisher also uploads a rendered preview artifact and writes the report to
 the job summary. Pull requests from forks use the same history and comment
@@ -504,9 +505,10 @@ code. Before merging shards or writing history, the publisher validates schema
 versions, URLs, labels, metric values, sample medians, configuration, layouts,
 units, platforms, and size limits. For fork pull requests, the artifact
 configuration must exactly match the configured file on the default branch. It
-then binds repository, commit, ref, URLs, and timestamp to trusted
-`workflow_run` metadata. This lets fork pull requests publish without trusting
-identity or storage layout supplied by their workflow.
+then binds the current and paired-baseline repository, commit, ref, URLs, and
+timestamp to trusted `workflow_run` and pull request API metadata. This lets
+fork pull requests publish without trusting identity or storage layout supplied
+by their workflow.
 
 The trusted publisher serializes writes per data repository and publishes one
 commit after all platform artifacts have passed validation.

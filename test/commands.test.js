@@ -58,6 +58,12 @@ test("records and renders without invoking a Go toolchain", () => {
     output,
   ]);
   assert.match(fs.readFileSync(output, "utf8"), /shard-id=language/u);
+  const baselineArtifactPath = path.join(artifact, "baseline.json");
+  const baselineArtifact = JSON.parse(
+    fs.readFileSync(baselineArtifactPath, "utf8"),
+  );
+  baselineArtifact.source.url = "https://malicious.example/fake-base";
+  fs.writeFileSync(baselineArtifactPath, JSON.stringify(baselineArtifact));
 
   const data = path.join(root, "data");
   const comment = path.join(root, "comment.md");
@@ -84,6 +90,12 @@ test("records and renders without invoking a Go toolchain", () => {
     "owner/project",
     "--expected-source-sha",
     sha,
+    "--expected-baseline-repository",
+    "owner/project",
+    "--expected-baseline-sha",
+    baselineSHA,
+    "--baseline-source-ref",
+    "main",
     "--source-ref",
     "feature",
     "--source-url",
@@ -100,6 +112,11 @@ test("records and renders without invoking a Go toolchain", () => {
   assert.match(report, /vs base/u);
   assert.match(report, /measured in the same runner job/u);
   assert.match(report, new RegExp(baselineSHA.slice(0, 12), "u"));
+  assert.match(
+    report,
+    new RegExp(`github\\.com/owner/project/commit/${baselineSHA}`, "u"),
+  );
+  assert.doesNotMatch(report, /malicious\.example/u);
   assert.equal(
     fs.existsSync(
       path.join(
@@ -137,6 +154,50 @@ test("records and renders without invoking a Go toolchain", () => {
     timestamp: "2026-07-28T12:00:00.000Z",
   });
 
+  assert.throws(
+    () =>
+      runRender([
+        "--artifacts",
+        artifact,
+        "--data-dir",
+        path.join(root, "rejected-missing-baseline-identity"),
+        "--series-kind",
+        "pull",
+        "--series-id",
+        "9",
+        "--series-label",
+        "PR #9",
+        "--expected-source-repository",
+        "owner/project",
+        "--expected-source-sha",
+        sha,
+      ]),
+    /expected baseline repository and SHA are required/u,
+  );
+  assert.throws(
+    () =>
+      runRender([
+        "--artifacts",
+        artifact,
+        "--data-dir",
+        path.join(root, "rejected-baseline-repository"),
+        "--series-kind",
+        "pull",
+        "--series-id",
+        "9",
+        "--series-label",
+        "PR #9",
+        "--expected-source-repository",
+        "owner/project",
+        "--expected-source-sha",
+        sha,
+        "--expected-baseline-repository",
+        "another/project",
+        "--expected-baseline-sha",
+        baselineSHA,
+      ]),
+    /artifact baseline repository .* does not match/u,
+  );
   assert.throws(
     () =>
       runRender([
