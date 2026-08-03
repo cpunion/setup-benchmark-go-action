@@ -250,7 +250,7 @@ jobs:
 
       - name: Render benchmark history
         id: render
-        uses: xgo-dev/setup-benchmark-go-action/publish@v1.0.3
+        uses: xgo-dev/setup-benchmark-go-action/publish@v1
         with:
           artifacts: benchmark-artifacts
           data-directory: benchmark-data
@@ -266,6 +266,8 @@ jobs:
           site-base-url: ${{ steps.pages.outputs.url }}
           expected-source-repository: ${{ github.event.workflow_run.head_repository.full_name }}
           expected-source-sha: ${{ github.event.workflow_run.head_sha }}
+          expected-baseline-repository: >-
+            ${{ steps.source.outputs.kind == 'pull' && github.repository || '' }}
           source-ref: ${{ github.event.workflow_run.head_branch }}
           source-url: >-
             ${{ format(

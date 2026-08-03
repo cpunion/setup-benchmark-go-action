@@ -42,6 +42,13 @@ function run() {
   add(args, "site-base-url", input("site-base-url"));
   add(args, "expected-source-repository", input("expected-source-repository"));
   add(args, "expected-source-sha", input("expected-source-sha"));
+  add(
+    args,
+    "expected-baseline-repository",
+    input("expected-baseline-repository"),
+  );
+  add(args, "expected-baseline-sha", input("expected-baseline-sha"));
+  add(args, "baseline-source-ref", input("baseline-source-ref"));
   add(args, "source-ref", input("source-ref"));
   add(args, "source-url", input("source-url"));
   add(args, "source-run-url", input("source-run-url"));

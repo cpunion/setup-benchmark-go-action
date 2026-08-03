@@ -56,3 +56,13 @@ test("benchmark validation and rendering remain hard failures", () => {
     assert.notEqual(step(name)["continue-on-error"], true, name);
   }
 });
+
+test("publisher pins paired baseline links to the target repository", () => {
+  const render = step("Render benchmark history");
+  assert.equal(render.uses, "xgo-dev/setup-benchmark-go-action/publish@v1");
+  assert.match(
+    render.with["expected-baseline-repository"],
+    /github\.repository/u,
+  );
+  assert.equal(render.with["expected-baseline-sha"], undefined);
+});

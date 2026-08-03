@@ -14,6 +14,7 @@ const {
 } = require("../src/artifact");
 
 const sha = "1234567890abcdef1234567890abcdef12345678";
+const baselineSHA = "abcdef1234567890abcdef1234567890abcdef12";
 
 function benchmark(name) {
   return {
@@ -58,11 +59,25 @@ test("validates, writes, loads, and merges distinct shards", () => {
     path.join(root, "first"),
     config,
     result("first", ["BenchmarkCoreA"]),
+    result("first", ["BenchmarkCoreA"], {
+      source: {
+        ...result("first", []).source,
+        sha: baselineSHA,
+        url: `https://github.com/owner/project/commit/${baselineSHA}`,
+      },
+    }),
   );
   writeArtifact(
     path.join(root, "second"),
     config,
     result("second", ["BenchmarkCoreB"]),
+    result("second", ["BenchmarkCoreB"], {
+      source: {
+        ...result("second", []).source,
+        sha: baselineSHA,
+        url: `https://github.com/owner/project/commit/${baselineSHA}`,
+      },
+    }),
   );
 
   const loaded = loadArtifacts(root);
@@ -72,6 +87,46 @@ test("validates, writes, loads, and merges distinct shards", () => {
     loaded.results[0].benchmarks.map((item) => item.name),
     ["BenchmarkCoreA", "BenchmarkCoreB"],
   );
+  assert.equal(loaded.baselines.length, 1);
+  assert.equal(loaded.baselines[0].source.sha, baselineSHA);
+  assert.deepEqual(
+    loaded.baselines[0].benchmarks.map((item) => item.name),
+    ["BenchmarkCoreA", "BenchmarkCoreB"],
+  );
+});
+
+test("requires a same-runner baseline for every artifact", () => {
+  const config = new Config({ id: "artifact", groups: { core: "^Core" } });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-paired-"));
+  writeArtifact(
+    path.join(root, "first"),
+    config,
+    result("first", ["BenchmarkCoreA"]),
+    result("first", ["BenchmarkCoreA"]),
+  );
+  writeArtifact(
+    path.join(root, "second"),
+    config,
+    result("second", ["BenchmarkCoreB"]),
+  );
+  assert.throws(
+    () => loadArtifacts(root),
+    /baseline must be present for every result artifact/u,
+  );
+});
+
+test("rejects a baseline recorded for a different platform", () => {
+  const config = new Config({ id: "artifact", groups: { core: "^Core" } });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "benchmark-platform-"));
+  const baseline = result("first", ["BenchmarkCoreA"]);
+  baseline.platform.label = "Different runner";
+  writeArtifact(
+    path.join(root, "first"),
+    config,
+    result("first", ["BenchmarkCoreA"]),
+    baseline,
+  );
+  assert.throws(() => loadArtifacts(root), /baseline platform does not match/u);
 });
 
 test("rejects duplicate shards, benchmarks, and source SHAs", () => {

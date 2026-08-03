@@ -38,6 +38,15 @@ inputs:
   expected-source-sha:
     description: Commit identity required in every downloaded artifact.
     default: ""
+  expected-baseline-repository:
+    description: Repository identity required in every paired baseline artifact.
+    default: ""
+  expected-baseline-sha:
+    description: Optional exact commit identity required in every paired baseline artifact.
+    default: ""
+  baseline-source-ref:
+    description: Trusted paired baseline ref shown in the report.
+    default: ""
   source-ref:
     description: Trusted source ref stored in history.
     default: ""
@@ -91,6 +100,9 @@ runs:
         BENCHMARK_SITE_BASE_URL: ${{ inputs.site-base-url }}
         BENCHMARK_EXPECTED_SOURCE_REPOSITORY: ${{ inputs.expected-source-repository }}
         BENCHMARK_EXPECTED_SOURCE_SHA: ${{ inputs.expected-source-sha }}
+        BENCHMARK_EXPECTED_BASELINE_REPOSITORY: ${{ inputs.expected-baseline-repository }}
+        BENCHMARK_EXPECTED_BASELINE_SHA: ${{ inputs.expected-baseline-sha }}
+        BENCHMARK_BASELINE_SOURCE_REF: ${{ inputs.baseline-source-ref }}
         BENCHMARK_SOURCE_REF: ${{ inputs.source-ref }}
         BENCHMARK_SOURCE_URL: ${{ inputs.source-url }}
         BENCHMARK_SOURCE_RUN_URL: ${{ inputs.source-run-url }}
