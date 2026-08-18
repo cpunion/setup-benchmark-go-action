@@ -12,6 +12,18 @@ const workflow = YAML.parse(
     "utf8",
   ),
 );
+const benchmarkWorkflow = YAML.parse(
+  fs.readFileSync(
+    path.join(__dirname, "..", ".github", "workflows", "benchmark.yml"),
+    "utf8",
+  ),
+);
+const commentWorkflow = YAML.parse(
+  fs.readFileSync(
+    path.join(__dirname, "..", ".github", "workflows", "benchmark-publish.yml"),
+    "utf8",
+  ),
+);
 const steps = workflow.jobs.publish.steps;
 const step = (name) => steps.find((candidate) => candidate.name === name);
 
@@ -20,6 +32,36 @@ test("publisher exposes an optional data repository dispatch event", () => {
   assert.equal(input.required, undefined);
   assert.equal(input.default, "");
   assert.equal(input.type, "string");
+});
+
+test("publisher supports trusted workflow-run and current-run sources", () => {
+  const input = workflow.on.workflow_call.inputs.source_mode;
+  assert.equal(input.default, "workflow-run");
+  assert.equal(input.type, "string");
+  assert.match(
+    step("Resolve benchmark source run").run,
+    /current-run publishing is limited to pushes/u,
+  );
+
+  const direct = benchmarkWorkflow.jobs.publish;
+  assert.equal(direct.needs, "benchmark");
+  assert.equal(direct.with.source_mode, "current-run");
+  assert.match(direct.if, /github\.event_name == 'push'/u);
+
+  const trusted = commentWorkflow.jobs.publish;
+  assert.match(trusted.if, /workflow_run\.event == 'pull_request'/u);
+  assert.equal(commentWorkflow.permissions.contents, "read");
+});
+
+test("pull request reports do not persist Pages data", () => {
+  assert.match(
+    step("Classify source series").run,
+    /publish=false\s+\[\[ "\$kind" != main \]\] \|\| publish=true/u,
+  );
+  assert.match(
+    step("Render benchmark history").with["site-base-url"],
+    /source\.outputs\.publish == 'true'/u,
+  );
 });
 
 test("data publishing failures degrade to a commented preview", () => {

@@ -14,15 +14,9 @@ The publisher creates one bot comment and updates it for later commits:
 
 ![Benchmark pull request comment](docs/images/pr-comment.png)
 
-GitHub Pages keeps long-term Main and Branch trends. A merged commit extends the
-Main series:
+GitHub Pages keeps the long-term Main trend. A merged commit extends the series:
 
 ![Main benchmark history](docs/images/pages-main.png)
-
-Pull request pages show the measured base and current head from the same runner
-job, while the head branch keeps the long-term history:
-
-![Pull request benchmark history](docs/images/pages-pull-request.png)
 
 ## Quick Start
 
@@ -66,9 +60,21 @@ jobs:
         with:
           config: .github/go-benchmark.yml
           benchmark-file: benchmark.txt
+
+  publish:
+    if: github.event_name == 'push'
+    needs: benchmark
+    permissions:
+      actions: read
+      contents: write
+    uses: xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1
+    with:
+      run_id: ${{ github.run_id }}
+      source_mode: current-run
 ```
 
-Publish from a trusted workflow on the default branch. Create
+Update pull request comments from a trusted workflow on the default branch.
+Create
 `.github/workflows/benchmark-publish.yml`:
 
 ```yaml
@@ -81,24 +87,26 @@ on:
 
 permissions:
   actions: read
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
 
 jobs:
   publish:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
     uses: xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1
     with:
       run_id: ${{ github.event.workflow_run.id }}
 ```
 
-The separate `workflow_run` publisher is intentional. Pull request code can
-produce benchmark artifacts, but only the publisher from the default branch can
-write history or comments. It validates every artifact before using it. Before
-each remote write, the publisher also verifies that a pull request still points
-at the benchmarked commit, so an older run that finishes late cannot replace
-newer history or comments.
+The two publisher modes separate trust and storage. A default-branch push uses
+`current-run` after its benchmark jobs and writes Pages directly. Pull request
+code only produces artifacts; a trusted `workflow_run` validates them and
+updates the comment without writing persistent benchmark data. Before updating
+a comment, it verifies that the pull request still points at the measured
+commit.
 
 By default, data and the generated site are committed atomically to a `pages`
 branch in the project repository. In **Settings > Pages**, select **Deploy from
@@ -383,19 +391,11 @@ Only equal platform IDs are merged or compared.
 
 ## Published Results
 
-The generated Pages site keeps separate **Main**, **Branches**, and **Pull
-requests** views. Each measured commit is stored directly at
-`commits/<sha>.json`, so its complete platform results can be found without
-recovering an older version of a shared history file. Pull request commit files
-also include the paired same-runner base observation used for their comparison.
-
-Main and branch series write a combined `summary.json` containing up to 500
-measured commits in chronological order. A pull request run updates both its
-branch summary and a compact PR summary containing only the paired base (when
-available) and the current head. Existing `history.json` data is merged into the
-new layout automatically. A synchronized compatibility copy is kept during the
-transition so workflow runs that started with an older action bundle can still
-publish without losing history.
+The generated Pages site stores each measured `main` commit directly at
+`commits/<sha>.json` and keeps a `summary.json` containing up to 500 commits in
+chronological order. Existing `history.json` data is merged into the layout
+automatically. A synchronized compatibility copy is kept so older action
+bundles can still publish without losing history.
 
 For a pull request, the publisher creates one bot comment and updates that same
 comment on later commits. When every platform artifact includes
@@ -423,12 +423,11 @@ setup and may reuse build caches for unchanged packages to keep the paired run
 short.
 
 The publisher also uploads a rendered preview artifact and writes the report to
-the job summary. Pull requests from forks use the same history and comment
-flow. Their artifacts must report the exact repository and commit from the
-trusted `workflow_run` event, and the publisher confirms the current pull
-request head again before writing. Their configuration must also match
-`config_path` on the default branch. The data token is never available to the
-pull request workflow.
+the job summary. Pull request results are not committed to Pages. Fork artifacts
+must report the exact repository and commit from the trusted `workflow_run`
+event, and their configuration must match `config_path` on the default branch.
+Same-repository pull requests may preview configuration changes. The data token
+is never available to the pull request workflow.
 
 ### External Data Repository
 
@@ -437,13 +436,14 @@ The default `pages` branch can live in another repository:
 ```yaml
 jobs:
   publish:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'push'
+    needs: benchmark
     uses: xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1
     with:
-      run_id: ${{ github.event.workflow_run.id }}
+      run_id: ${{ github.run_id }}
+      source_mode: current-run
       data_repository: owner/project-benchmark-data
       data_dispatch_event: go-benchmarks-published
-      config_path: .github/project-benchmark.yml
     secrets:
       data_token: ${{ secrets.BENCHMARK_DATA_TOKEN }}
 ```
@@ -454,12 +454,11 @@ after its data is ready, using the same token. Configure Pages there from its
 `pages` branch or handle that event with a Pages deployment workflow. If the
 Pages URL is nonstandard, set `site_base_url`.
 
-An external repository and token are optional for pull request reporting. If
-the token is missing, the repository cannot be checked out for writing, the
-push fails, or the deployment notification fails, the publisher keeps the
-rendered preview and adds a warning to its pull request comment instead of
-failing. Artifact download, trusted configuration, source validation, and
-rendering errors still fail the workflow.
+An external repository is not required for pull request reporting. If a main
+publication cannot write the data repository or send its deployment
+notification, the rendered preview is preserved and the job summary includes a
+warning. Artifact download, source validation, and rendering errors still fail
+the workflow.
 
 ## Recorder Reference
 
@@ -488,23 +487,25 @@ rendering errors still fail the workflow.
 Call
 `xgo-dev/setup-benchmark-go-action/.github/workflows/publish.yml@v1` as a job.
 
-| Input                 | Required | Default                    | Meaning                                                |
-| --------------------- | -------- | -------------------------- | ------------------------------------------------------ |
-| `run_id`              | yes      |                            | Workflow run containing recorder artifacts.            |
-| `data_repository`     | no       | caller repository          | Repository containing the data branch and Pages site.  |
-| `data_branch`         | no       | `pages`                    | Data and Pages branch.                                 |
-| `data_dispatch_event` | no       |                            | Event sent to the data repository after data is ready. |
-| `site_base_url`       | no       | derived from repository    | Public Pages root URL.                                 |
-| `artifact_pattern`    | no       | `go-benchmark-*`           | Artifact download glob.                                |
-| `config_path`         | no       | `.github/go-benchmark.yml` | Trusted default-branch config for fork PRs.            |
+| Input                 | Required | Default                    | Meaning                                                           |
+| --------------------- | -------- | -------------------------- | ----------------------------------------------------------------- |
+| `run_id`              | yes      |                            | Workflow run containing recorder artifacts.                       |
+| `source_mode`         | no       | `workflow-run`             | `workflow-run`, or `current-run` for a default-branch push.       |
+| `data_repository`     | no       | caller repository          | Repository containing the data branch and Pages site.             |
+| `data_branch`         | no       | `pages`                    | Data and Pages branch.                                            |
+| `data_dispatch_event` | no       |                            | Event sent to the data repository after data is ready.            |
+| `site_base_url`       | no       | derived from repository    | Public Pages root URL.                                            |
+| `artifact_pattern`    | no       | `go-benchmark-*`           | Artifact download glob.                                           |
+| `config_path`         | no       | `.github/go-benchmark.yml` | Trusted default-branch config for cross-repository pull requests. |
 
 | Secret       | Required | Meaning                                                          |
 | ------------ | -------- | ---------------------------------------------------------------- |
 | `data_token` | no       | Token with contents write access to an external data repository. |
 
-Recommended publisher permissions are `actions: read`, `contents: write`,
-`issues: write`, and `pull-requests: write`. GitHub may reduce permissions
-passed to a reusable workflow, so the caller must grant them.
+Direct main publishing needs `actions: read` and `contents: write`. Pull request
+comment publishing needs `actions: read`, `contents: read`, `issues: write`, and
+`pull-requests: write`. GitHub may reduce permissions passed to a reusable
+workflow, so the caller must grant them.
 
 ## Runtime And Security
 
@@ -514,14 +515,14 @@ runner-provided Node 24 runtime. The action is isolated from a consumer's
 It has no production dependency on the Go toolchain.
 
 Artifacts contain JSON data and a configuration snapshot, never executable
-code. Before merging shards or writing history, the publisher validates schema
-versions, URLs, labels, metric values, sample medians, configuration, layouts,
-units, platforms, and size limits. For fork pull requests, the artifact
-configuration must exactly match the configured file on the default branch. It
-then binds current-result identity to trusted `workflow_run` metadata, restricts
+code. Before merging shards, commenting, or writing history, the publisher
+validates schema versions, URLs, labels, metric values, sample medians,
+configuration, layouts, units, platforms, and size limits. `current-run` accepts
+only the current default-branch push. For fork pull requests, the artifact
+configuration must exactly match the configured file on the default branch.
+The trusted publisher binds result identity to GitHub's run metadata, restricts
 paired baselines to the pull request target repository, and rebuilds trusted
-source URLs. This lets fork pull requests publish without trusting external
-links or storage layout supplied by their workflow.
+source URLs.
 
 The trusted publisher serializes writes per data repository and publishes one
 commit after all platform artifacts have passed validation.

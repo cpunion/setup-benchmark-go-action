@@ -7,6 +7,10 @@ on:
         description: Workflow run containing go-benchmark-* artifacts.
         required: true
         type: number
+      source_mode:
+        description: Resolve the source from a trusted workflow_run event or the current default-branch push.
+        default: workflow-run
+        type: string
       data_repository:
         description: Repository that stores the Pages branch. Defaults to the source repository.
         default: ""
@@ -51,16 +55,72 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Resolve benchmark source run
+        id: source-run
+        env:
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+          SOURCE_MODE: ${{ inputs.source_mode }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+          TRIGGERED_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          case "$SOURCE_MODE" in
+            workflow-run)
+              if [[ "$TRIGGER_EVENT" != workflow_run ]] ||
+                [[ "$RUN_ID" != "$TRIGGERED_RUN_ID" ]]; then
+                echo "workflow-run mode requires its triggering workflow run" >&2
+                exit 1
+              fi
+              ;;
+            current-run)
+              if [[ "$TRIGGER_EVENT" != push ]] ||
+                [[ "$RUN_ID" != "$CURRENT_RUN_ID" ]]; then
+                echo "current-run mode requires the current push workflow run" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "invalid source mode: $SOURCE_MODE" >&2
+              exit 1
+              ;;
+          esac
+
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")"
+          run_event="$(jq -r '.event // ""' <<<"$run_json")"
+          head_branch="$(jq -r '.head_branch // ""' <<<"$run_json")"
+          head_repository="$(
+            jq -r '.head_repository.full_name // .repository.full_name // ""' <<<"$run_json"
+          )"
+          head_sha="$(jq -r '.head_sha // ""' <<<"$run_json")"
+          if [[ "$SOURCE_MODE" == current-run ]] &&
+            { [[ "$run_event" != push ]] || [[ "$head_branch" != "$DEFAULT_BRANCH" ]]; }; then
+            echo "current-run publishing is limited to pushes on $DEFAULT_BRANCH" >&2
+            exit 1
+          fi
+
+          {
+            echo "branch=$head_branch"
+            echo "event=$run_event"
+            echo "pr=$(jq -r '.pull_requests[0].number // ""' <<<"$run_json")"
+            echo "repository=$head_repository"
+            echo "run-url=$(jq -r '.html_url // ""' <<<"$run_json")"
+            echo "sha=$head_sha"
+            echo "timestamp=$(jq -r '.run_started_at // .created_at // ""' <<<"$run_json")"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Classify source series
         id: source
         env:
           CONFIGURED_DATA_REPOSITORY: ${{ inputs.data_repository }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_EVENT: ${{ github.event.workflow_run.event }}
-          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD_BRANCH: ${{ steps.source-run.outputs.branch }}
+          HEAD_REPOSITORY: ${{ steps.source-run.outputs.repository }}
+          HEAD_SHA: ${{ steps.source-run.outputs.sha }}
+          RUN_EVENT: ${{ steps.source-run.outputs.event }}
+          PR_NUMBER: ${{ steps.source-run.outputs.pr }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -111,8 +171,8 @@ jobs:
             id="$(printf '%s' "$HEAD_BRANCH" | sha256sum | cut -c1-16)"
             label="Branch $HEAD_BRANCH"
           fi
-          publish="$same_repository"
-          [[ "$kind" != pull ]] || publish=true
+          publish=false
+          [[ "$kind" != main ]] || publish=true
           branch_seed="$HEAD_BRANCH"
           branch_label="Branch $HEAD_BRANCH"
           if [[ "$same_repository" != true ]]; then
@@ -263,27 +323,22 @@ jobs:
           additional-series-kind: ${{ steps.source.outputs.additional-kind }}
           additional-series-id: ${{ steps.source.outputs.additional-id }}
           additional-series-label: ${{ steps.source.outputs.additional-label }}
-          site-base-url: ${{ steps.pages.outputs.url }}
-          expected-source-repository: ${{ github.event.workflow_run.head_repository.full_name }}
-          expected-source-sha: ${{ github.event.workflow_run.head_sha }}
+          site-base-url: >-
+            ${{ steps.source.outputs.publish == 'true' &&
+                steps.pages.outputs.url || '' }}
+          expected-source-repository: ${{ steps.source-run.outputs.repository }}
+          expected-source-sha: ${{ steps.source-run.outputs.sha }}
           expected-baseline-repository: >-
             ${{ steps.source.outputs.kind == 'pull' && github.repository || '' }}
-          source-ref: ${{ github.event.workflow_run.head_branch }}
+          source-ref: ${{ steps.source-run.outputs.branch }}
           source-url: >-
             ${{ format(
                 '{0}/{1}/commit/{2}',
                 github.server_url,
-                github.event.workflow_run.head_repository.full_name,
-                github.event.workflow_run.head_sha) }}
-          source-run-url: >-
-            ${{ format(
-                '{0}/{1}/actions/runs/{2}',
-                github.server_url,
-                github.repository,
-                inputs.run_id) }}
-          source-timestamp: >-
-            ${{ github.event.workflow_run.run_started_at ||
-                github.event.workflow_run.created_at }}
+                steps.source-run.outputs.repository,
+                steps.source-run.outputs.sha) }}
+          source-run-url: ${{ steps.source-run.outputs.run-url }}
+          source-timestamp: ${{ steps.source-run.outputs.timestamp }}
           comment-path: ${{ runner.temp }}/go-benchmark-comment.md
 
       - name: Commit benchmark data
@@ -296,7 +351,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.source.outputs.pr }}
           SERIES_KIND: ${{ steps.source.outputs.kind }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ steps.source-run.outputs.sha }}
         run: |
           set -euo pipefail
           if [[ "$SERIES_KIND" == pull ]]; then
@@ -341,7 +396,7 @@ jobs:
                 github.server_url,
                 github.repository,
                 inputs.run_id) }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ steps.source-run.outputs.sha }}
         run: |
           set -euo pipefail
           jq -cn \
@@ -435,7 +490,7 @@ jobs:
           COMMENT_PATH: ${{ steps.render.outputs.comment-path }}
           COMMENT_MARKER: ${{ steps.render.outputs.marker }}
           PR_NUMBER: ${{ steps.source.outputs.pr }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_SHA: ${{ steps.source-run.outputs.sha }}
         with:
           script: |
             const fs = require("fs");
